@@ -395,6 +395,8 @@ tb.innerHTML = rows.map(function(t){
         '<div class="alert" id="al_'+key(t.taskId)+'"></div>' +
         (editable ? '' : '<div class="alert alert-info show">This task is '+esc(t.status)+
                           ' — it can no longer be edited here.</div>') +
+        (t.refLink ? '<div class="field"><label>Reference link</label>' +
+          '<a href="'+esc(t.refLink)+'" target="_blank" class="btn btn-ghost btn-sm">Open link &#8599;</a></div>' : '') +
         '<div class="expand-grid">' +
           '<div class="field"><label for="d_'+key(t.taskId)+'">New date</label>' +
             '<input type="date" id="d_'+key(t.taskId)+'" value="'+esc(t.currentDate||today)+'" min="'+minDate+'" '+(editable?'':'disabled')+'>' +

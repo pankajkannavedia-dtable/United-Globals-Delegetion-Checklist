@@ -84,9 +84,9 @@ var COL = {
   PLANNED: 5, REV1: 6, REV2: 7, DUE: 8, REVISIONS: 9, STATUS: 10, REASON: 11,
   VOICE: 12, DOCS: 13, PROOF: 14, EMAIL: 15, PROOF_REQ: 16, MD_REMARK: 17,
   EA_REMARK: 18, FOLLOWUP: 19, PRIORITY: 20, ACTUAL: 21, LOCATION: 22, DEPARTMENT: 23,
-  VOICE_BY: 24, VOICE_AT: 25, VERIFIER: 26
+  VOICE_BY: 24, VOICE_AT: 25, VERIFIER: 26, REF_LINK: 27
 };
-var MASTER_COLS = 27;
+var MASTER_COLS = 28;
 
 /* ---- Doer List column map (0-based) ----
    A=Email  B=Name  C=Role  D=Mobile  E=Role1  F=Status  G=Password */
@@ -350,6 +350,17 @@ function addVerifierColumnOneTime() {
       .setFontWeight('bold').setBackground(CONFIG.PRIMARY_COLOR).setFontColor('#ffffff');
   }
   return 'Verifier column ready at column ' + col + '.';
+}
+
+/** RUN ONCE FROM THE EDITOR: adds the "Reference Link" header to the live Master sheet. */
+function addRefLinkColumnOneTime() {
+  var sh = getSheet(CONFIG.MASTER_SHEET);
+  var col = COL.REF_LINK + 1; // column AB
+  if (String(sh.getRange(1, col).getValue()).trim() === '') {
+    sh.getRange(1, col).setValue('Reference Link')
+      .setFontWeight('bold').setBackground(CONFIG.PRIMARY_COLOR).setFontColor('#ffffff');
+  }
+  return 'Reference Link column ready at column ' + col + '.';
 }
 
 /** Test a specific pair without using the web app: testLogin('you@co.com','yourPassword') */
@@ -898,6 +909,7 @@ function rowToTask(r, locIdx, user, holidaySet) {
     voiceBy     : (r[COL.VOICE_BY] || '').toString().trim(),
     voiceAt     : fmtDateTime(r[COL.VOICE_AT]),
     documents   : (r[COL.DOCS] || '').toString().split(',').map(function (s) { return s.trim(); }).filter(String),
+    refLink     : (r[COL.REF_LINK] || '').toString().trim(),
     proofUrl    : (r[COL.PROOF] || '').toString().trim(),
     email       : (r[COL.EMAIL] || '').toString().trim(),
     proofReq    : ((r[COL.PROOF_REQ] || 'No').toString().trim().toLowerCase() === 'yes') ? 'Yes' : 'No',
@@ -961,6 +973,7 @@ function assignTask(payload) {
   row[COL.VOICE_BY]    = voiceUrl ? user.name : '';
   row[COL.VOICE_AT]    = voiceUrl ? new Date() : '';
   row[COL.DOCS]        = docUrls.join(', ');
+  row[COL.REF_LINK]    = (payload.refLink || '').toString().trim();
   row[COL.EMAIL]       = email;
   row[COL.PROOF_REQ]   = payload.proofRequired ? 'Yes' : 'No';
   row[COL.FOLLOWUP]    = 0;
@@ -994,6 +1007,61 @@ function reassignTask(taskId, newDoerName) {
   // No immediate email — the new doer is notified at 4 PM if the due date is today.
 
   return { success: true, message: 'Task reassigned to ' + newDoerName + '.' };
+}
+
+/**
+ * UPDATE — Edit a delegated task's details in place (permission-checked server-side).
+ * Does NOT touch assignedTo/status — use reassignTask / approve / disapprove for those.
+ * payload: {task, dueDate, priority, verifier, proofRequired, refLink}
+ */
+function editTask(taskId, payload) {
+  var found = findTaskRow(taskId);
+  if (!found) throw new Error('Task ' + taskId + ' was not found.');
+  var user = requireTaskOwner(found.values);
+  payload = payload || {};
+
+  if (!payload.task || !payload.task.toString().trim()) throw new Error('Enter a task description.');
+  if (!payload.dueDate) throw new Error('Choose a due date.');
+
+  var changes = [];
+  var oldTask = (found.values[COL.TASK] || '').toString();
+  var newTask = payload.task.toString().trim();
+  if (newTask !== oldTask) changes.push('task description');
+
+  var oldDue = fmtDate(found.values[COL.DUE]);
+  var newDue = payload.dueDate;
+  if (newDue !== oldDue) changes.push('due date to ' + newDue);
+
+  var oldPriority = (found.values[COL.PRIORITY] || 'Medium').toString().trim();
+  var newPriority = (payload.priority || 'Medium').toString().trim();
+  if (newPriority !== oldPriority) changes.push('priority to ' + newPriority);
+
+  var oldVerifier = (found.values[COL.VERIFIER] || '').toString().trim();
+  var newVerifier = (payload.verifier && payload.verifier.toString().trim()) ? payload.verifier.toString().trim() : user.name;
+  if (newVerifier !== oldVerifier) changes.push('verifier to ' + newVerifier);
+
+  var oldProofReq = ((found.values[COL.PROOF_REQ] || 'No').toString().trim().toLowerCase() === 'yes') ? 'Yes' : 'No';
+  var newProofReq = payload.proofRequired ? 'Yes' : 'No';
+  if (newProofReq !== oldProofReq) changes.push('evidence required to ' + newProofReq);
+
+  var oldRefLink = (found.values[COL.REF_LINK] || '').toString().trim();
+  var newRefLink = (payload.refLink || '').toString().trim();
+  if (newRefLink !== oldRefLink) changes.push('reference link');
+
+  found.sheet.getRange(found.rowNumber, COL.TASK + 1).setValue(newTask);
+  found.sheet.getRange(found.rowNumber, COL.PLANNED + 1).setValue(newDue);
+  found.sheet.getRange(found.rowNumber, COL.DUE + 1).setValue(newDue);
+  found.sheet.getRange(found.rowNumber, COL.PRIORITY + 1).setValue(newPriority);
+  found.sheet.getRange(found.rowNumber, COL.VERIFIER + 1).setValue(newVerifier);
+  found.sheet.getRange(found.rowNumber, COL.PROOF_REQ + 1).setValue(newProofReq);
+  found.sheet.getRange(found.rowNumber, COL.REF_LINK + 1).setValue(newRefLink);
+
+  if (changes.length) {
+    found.sheet.getRange(found.rowNumber, COL.MD_REMARK + 1)
+         .setValue(appendRemark(found.values[COL.MD_REMARK], 'Edited — updated ' + changes.join(', '), user.name));
+  }
+
+  return { success: true, message: 'Task ' + taskId + ' updated.' };
 }
 
 /** UPDATE — Approve (ADMIN only, server-enforced). */
@@ -1939,7 +2007,7 @@ function setupSheets() {
     'Planned Date', 'Revision 1', 'Revision 2', 'Due Date', 'Revisions', 'Status', 'Reason',
     'Voice Note', 'Document', 'Proof of Completion', 'Email ID', 'Proof Required',
     'MD Remark', 'EA Remark', 'Follow Up Count', 'Priority', 'Actual Date', 'Location', 'Department',
-    'Voice Note By', 'Voice Note At'];
+    'Voice Note By', 'Voice Note At', 'Verifier', 'Reference Link'];
   master.getRange(1, 1, 1, mHeaders.length).setValues([mHeaders])
         .setFontWeight('bold').setBackground(CONFIG.PRIMARY_COLOR).setFontColor('#ffffff');
   master.setFrozenRows(1);

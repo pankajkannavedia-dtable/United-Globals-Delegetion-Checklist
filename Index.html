@@ -272,6 +272,7 @@ function submitForgot(){
           <th>Voice note</th>
           <th>Task log</th>
           <th>Docs</th>
+          <th>Link</th>
           <th>Proof</th>
           <th data-key="proofReq">Proof req.</th>
           <th data-key="priority">Priority</th>
@@ -350,10 +351,57 @@ function submitForgot(){
         <input type="file" id="aFiles" multiple style="display:none;">
         <div class="file-list" id="aFileList"></div>
       </div>
+      <div class="field">
+        <label for="aRefLink">Reference link (optional)</label>
+        <input type="url" id="aRefLink" placeholder="e.g. link to the Google Sheet the doer needs to update">
+        <span class="hint">The doer will see a button to open this link directly.</span>
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeModal('mAssign')">Cancel</button>
       <button class="btn btn-primary" id="assignSubmit" onclick="submitAssign(this)">Assign task</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EDIT TASK ============ -->
+<div class="overlay" id="mEdit">
+  <div class="modal wide">
+    <div class="modal-head"><h3>Edit task</h3><button class="modal-close" onclick="closeModal('mEdit')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="editAlert"></div>
+      <div class="field"><label>Task ID</label><div class="readout" id="eTaskId"></div></div>
+      <div class="grid-2">
+        <div class="field">
+          <label class="required" for="ePriority">Priority</label>
+          <select id="ePriority">
+            <? for (var i = 0; i < cfg.PRIORITIES.length; i++) { ?><option><?= cfg.PRIORITIES[i] ?></option><? } ?>
+          </select>
+        </div>
+        <div class="field"><label class="required" for="eDue">Due date</label><input type="date" id="eDue"></div>
+      </div>
+      <div class="field combo">
+        <label for="eVerifier">Verifier (optional)</label>
+        <input type="text" id="eVerifier" placeholder="Defaults to you" autocomplete="off">
+        <div class="combo-list" id="eVerifierList"></div>
+      </div>
+      <div class="field">
+        <label class="required" for="eTask">Task description</label>
+        <textarea id="eTask"></textarea>
+      </div>
+      <div class="field">
+        <label for="eProofReq">Evidence required</label>
+        <select id="eProofReq"><option value="No">No</option><option value="Yes">Yes</option></select>
+      </div>
+      <div class="field">
+        <label for="eRefLink">Reference link (optional)</label>
+        <input type="url" id="eRefLink" placeholder="e.g. link to the Google Sheet the doer needs to update">
+        <span class="hint">The doer will see a button to open this link directly.</span>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mEdit')">Cancel</button>
+      <button class="btn btn-primary" id="editSubmit" onclick="submitEdit(this)">Save changes</button>
     </div>
   </div>
 </div>
@@ -645,6 +693,7 @@ function renderTable(){
              '<span class="menu-list" id="m_'+t.taskId+'">' +
                '<button onclick="openDetails(\''+t.taskId+'\')">View details</button>' +
                '<button onclick="openLog(\''+t.taskId+'\')">View task log</button>' +
+               (canAct ? '<button onclick="openEdit(\''+t.taskId+'\')">Edit task</button>' : '') +
                (canAct ? '<button onclick="openReassign(\''+t.taskId+'\')">Reassign task</button>' : '') +
                (canAct ? '<button onclick="openRemark(\''+t.taskId+'\',\'md\')">Add MD remark</button>' : '') +
                (canAct ? '<button onclick="openRemark(\''+t.taskId+'\',\'ea\')">Add EA remark</button>' : '') +
@@ -667,6 +716,7 @@ function renderTable(){
           ? '<button class="link-btn" onclick="openLog(\''+t.taskId+'\')">View <span class="badge b-count">'+logCount+'</span></button>'
           : '<span class="dash">—</span>')+'</td>' +
       '<td>'+fileIcons(t.documents, '&#128206;', 'Document')+'</td>' +
+      '<td>'+fileIcons(t.refLink ? [t.refLink] : [], '&#128279;', 'Link')+'</td>' +
       '<td>'+fileIcons(t.proofUrl ? [t.proofUrl] : [], '&#128444;', 'Proof')+'</td>' +
       '<td><span class="badge '+(t.proofReq==='Yes'?'b-yes':'b-no')+'">'+t.proofReq+'</span></td>' +
       '<td><span class="badge '+priorityClass(t.priority)+'">'+esc(t.priority)+'</span></td>' +
@@ -769,7 +819,7 @@ function closeVoice(){
 /* =============================== ASSIGN =============================== */
 function openAssign(){
   hideAlert('assignAlert');
-  ['aDoer','aTask','aVerifier'].forEach(function(id){ document.getElementById(id).value=''; });
+  ['aDoer','aTask','aVerifier','aRefLink'].forEach(function(id){ document.getElementById(id).value=''; });
   document.getElementById('aDue').value = todayStr();
   document.getElementById('aDue').min = todayStr();
   document.getElementById('aProofReq').value = 'No';
@@ -807,7 +857,8 @@ function submitAssign(btn){
     task     : document.getElementById('aTask').value.trim(),
     dueDate  : document.getElementById('aDue').value,
     verifier : document.getElementById('aVerifier').value.trim(),
-    proofRequired : document.getElementById('aProofReq').value === 'Yes'
+    proofRequired : document.getElementById('aProofReq').value === 'Yes',
+    refLink  : document.getElementById('aRefLink').value.trim()
   };
   if(!payload.doerName){ showAlert('assignAlert','Choose a doer from the list.'); return; }
   if(!state.doers.some(function(d){ return d.name === payload.doerName; })){
@@ -851,6 +902,43 @@ function submitReassign(btn){
     .withSuccessHandler(function(res){ busy(btn,false); closeModal('mReassign'); toast(res.message); load(); })
     .withFailureHandler(function(e){ busy(btn,false); showAlert('reassignAlert', e.message); })
     .reassignTask(reassignId, doer);
+}
+
+/* =============================== EDIT TASK =============================== */
+var editId = null;
+function openEdit(id){
+  var t = taskById(id); if(!t) return;
+  editId = id; hideAlert('editAlert');
+  document.getElementById('eTaskId').textContent = t.taskId + ' — assigned to ' + t.assignedTo;
+  document.getElementById('eTask').value = t.task;
+  document.getElementById('eDue').value = t.dueDate;
+  document.getElementById('eDue').min = todayStr();
+  document.getElementById('ePriority').value = t.priority;
+  document.getElementById('eVerifier').value = t.verifier || '';
+  document.getElementById('eProofReq').value = t.proofReq;
+  document.getElementById('eRefLink').value = t.refLink || '';
+  closeModal('mDetails'); closeModal('mLog');
+  openModal('mEdit');
+}
+function submitEdit(btn){
+  hideAlert('editAlert');
+  var payload = {
+    task     : document.getElementById('eTask').value.trim(),
+    dueDate  : document.getElementById('eDue').value,
+    priority : document.getElementById('ePriority').value,
+    verifier : document.getElementById('eVerifier').value.trim(),
+    proofRequired : document.getElementById('eProofReq').value === 'Yes',
+    refLink  : document.getElementById('eRefLink').value.trim()
+  };
+  if(!payload.task){ showAlert('editAlert','Enter a task description.'); return; }
+  if(!payload.dueDate){ showAlert('editAlert','Choose a due date.'); return; }
+  if(payload.verifier && !state.doers.some(function(d){ return d.name === payload.verifier; })){
+    showAlert('editAlert','That verifier is not in the Doer List.'); return; }
+  busy(btn, true, 'Saving…');
+  google.script.run
+    .withSuccessHandler(function(res){ busy(btn,false); closeModal('mEdit'); toast(res.message); load(); })
+    .withFailureHandler(function(e){ busy(btn,false); showAlert('editAlert', e.message); })
+    .editTask(editId, payload);
 }
 
 /* =============================== REMARKS & LOG =============================== */
@@ -920,6 +1008,9 @@ function openDetails(id){
         : '<span class="dash">None</span>') +
     row('Task log', '<button class="link-btn" onclick="openLog(\''+t.taskId+'\')">View full history</button>') +
     row('Attachments', fileIcons(t.documents,'&#128206;','Document')) +
+    row('Reference link', t.refLink
+        ? '<a href="'+esc(t.refLink)+'" target="_blank" class="btn btn-ghost btn-sm">Open link</a>'
+        : '<span class="dash">None</span>') +
     row('Proof of completion', fileIcons(t.proofUrl?[t.proofUrl]:[], '&#128444;','Proof'));
   openModal('mDetails');
 }
@@ -998,6 +1089,7 @@ wireCombo('fTask','fTaskList', function(){
 }, applyFilters);
 wireCombo('aDoer','aDoerList', function(){ return state.doers.map(function(d){ return d.name; }); });
 wireCombo('aVerifier','aVerifierList', function(){ return state.doers.map(function(d){ return d.name; }); });
+wireCombo('eVerifier','eVerifierList', function(){ return state.doers.map(function(d){ return d.name; }); });
 wireCombo('rDoer','rDoerList', function(){ return state.doers.map(function(d){ return d.name; }); });
 wireCombo('bOriginal','bOriginalList', function(){ return state.doers.map(function(d){ return d.name; }); });
 wireCombo('bBuddy','bBuddyList', function(){ return state.doers.map(function(d){ return d.name; }); });
