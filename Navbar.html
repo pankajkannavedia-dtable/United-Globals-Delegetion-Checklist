@@ -1,0 +1,230 @@
+<!-- ==========================================================================
+     Navbar.html — the ONLY navigation in the system. No sidebar anywhere.
+     Logo, company name and links all come from CONFIG in Code.gs.
+     ========================================================================== -->
+<? var nav = getNavContext(); ?>
+<nav class="nav">
+  <div class="nav-brand">
+    <img src="<?= nav.logo ?>" alt="<?= nav.company ?>" onerror="this.style.display='none'">
+    <div>
+      <div class="bn"><?= nav.company ?></div>
+      <div class="bt"><?= nav.tagline ?></div>
+    </div>
+  </div>
+
+  <div class="nav-links">
+    <? for (var i = 0; i < nav.links.length; i++) { ?>
+      <a href="javascript:void(0)" onclick="goToPage('<?= nav.links[i].key ?>')"
+         class="<?= nav.links[i].active ? 'active' : '' ?>"><?= nav.links[i].title ?></a>
+    <? } ?>
+  </div>
+
+  <div class="nav-user">
+    <div class="avatar"><?= nav.initial ?></div>
+    <div>
+      <div class="un"><?= nav.user.name ?></div>
+      <div class="ur"><?= nav.user.role ?></div>
+    </div>
+       <button class="btn-logout" onclick="signOut()">Sign out</button>
+  </div>
+</nav>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ---- navigation: the page is recorded server-side, so the URL stays clean ---- */
+var APP_URL = '<?= nav.appUrl ?>';
+function goToPage(key){
+  document.body.style.cursor = 'progress';
+  google.script.run
+    .withSuccessHandler(function(){ window.top.location.href = APP_URL; })
+    .withFailureHandler(function(e){ document.body.style.cursor=''; toast(e.message, true); })
+    .setCurrentPage(key);
+}
+function signOut(){
+  google.script.run
+    .withSuccessHandler(function(){ window.top.location.href = APP_URL; })
+    .withFailureHandler(function(){ window.top.location.href = APP_URL; })
+    .signOutServer();
+}
+
+/* ---- shared helpers available to every page ---- */
+function toast(msg, isError){
+  var box = document.getElementById('toasts');
+  var el = document.createElement('div');
+  el.className = 'toast' + (isError ? ' err' : '');
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(function(){ el.remove(); }, 4200);
+}
+function esc(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function nl2br(s){ return esc(s).replace(/\r\n|\r|\n/g, '<br>'); }
+function initials(name){
+  return String(name || '?').trim().split(/\s+/).map(function(w){return w.charAt(0);})
+    .slice(0,2).join('').toUpperCase();
+}
+function prettyDate(d){
+  if(!d) return '—';
+  var dt = new Date(d);
+  if(isNaN(dt.getTime())) return d;
+  return dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+}
+function todayStr(){
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function statusClass(s){
+  s = (s||'').toLowerCase();
+  if(s === 'completed') return 'b-completed';
+  if(s === 'shifted') return 'b-shifted';
+  if(s === 'approval waiting') return 'b-approval';
+  return 'b-pending';
+}
+function priorityClass(p){
+  p = (p||'').toLowerCase();
+  if(p === 'critical') return 'b-critical';
+  if(p === 'high') return 'b-high';
+  return 'b-medium';
+}
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+function showAlert(id, msg, type){
+  var el = document.getElementById(id);
+  if(!el) return;
+  el.className = 'alert alert-' + (type || 'error') + ' show';
+  el.textContent = msg;
+}
+function hideAlert(id){
+  var el = document.getElementById(id);
+  if(el){ el.className = 'alert'; el.textContent = ''; }
+}
+function busy(btn, on, label){
+  if(!btn) return;
+  if(on){ btn.dataset.old = btn.textContent; btn.disabled = true; btn.textContent = label || 'Working…'; }
+  else { btn.disabled = false; btn.textContent = btn.dataset.old || btn.textContent; }
+}
+/* read a File into {name, mimeType, data(base64)} for the server */
+function readFile(file){
+  return new Promise(function(resolve, reject){
+    var r = new FileReader();
+    r.onload = function(){
+      resolve({ name: file.name, mimeType: file.type || 'application/octet-stream',
+                data: r.result.split(',')[1] });
+    };
+    r.onerror = function(){ reject(new Error('Could not read ' + file.name)); };
+    r.readAsDataURL(file);
+  });
+}
+/* parse " || "-joined timestamped remark strings into a timeline */
+function parseRemarks(raw){
+  if(!raw) return [];
+  return String(raw).split('||').map(function(part){
+    part = part.trim();
+    if(!part) return null;
+    var m = part.match(/^\[([^\]]+)\]\s*([^:]*):\s*([\s\S]*)$/);
+    var item = m ? { when: m[1], who: m[2], text: m[3] } : { when: '', who: '', text: part };
+    var t = item.text.toLowerCase();
+    item.kind = t.indexOf('shift') > -1 ? 'shift'
+              : (t.indexOf('approv') > -1 || t.indexOf('complete') > -1) ? 'mark' : 'remark';
+    return item;
+  }).filter(Boolean);
+}
+/* CSV export from an array of arrays */
+function downloadCSV(rows, filename){
+  var csv = rows.map(function(r){
+    return r.map(function(c){
+      var v = String(c == null ? '' : c).replace(/"/g,'""');
+      return '"' + v + '"';
+    }).join(',');
+  }).join('\n');
+  var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+/* searchable dropdown wiring: input + <div class="combo-list"> */
+function wireCombo(inputId, listId, getItems, onPick){
+  var input = document.getElementById(inputId), list = document.getElementById(listId);
+  function render(){
+    var q = input.value.trim().toLowerCase();
+    var items = getItems().filter(function(v){ return !q || v.toLowerCase().indexOf(q) > -1; }).slice(0, 60);
+    list.innerHTML = items.length
+      ? items.map(function(v){ return '<div data-v="' + esc(v) + '">' + esc(v) + '</div>'; }).join('')
+      : '<div style="color:#868da8;cursor:default">No matches</div>';
+    list.classList.add('open');
+  }
+  input.addEventListener('focus', render);
+  input.addEventListener('input', function(){ render(); if(onPick) onPick(input.value); });
+  list.addEventListener('mousedown', function(e){
+    var d = e.target.closest('[data-v]'); if(!d) return;
+    input.value = d.dataset.v; list.classList.remove('open'); if(onPick) onPick(input.value);
+  });
+  input.addEventListener('blur', function(){ setTimeout(function(){ list.classList.remove('open'); }, 150); });
+}
+/* ---- sorting: click any <th data-key="..."> to sort, click again to reverse ---- */
+function wireSort(tableId, state, render){
+  var ths = document.querySelectorAll('#' + tableId + ' thead th[data-key]');
+  Array.prototype.forEach.call(ths, function(th){
+    th.addEventListener('click', function(){
+      var k = th.getAttribute('data-key');
+      state.sort = (state.sort && state.sort.key === k)
+        ? { key:k, dir: state.sort.dir === 'asc' ? 'desc' : 'asc' }
+        : { key:k, dir:'asc' };
+      Array.prototype.forEach.call(ths, function(o){ o.removeAttribute('data-dir'); });
+      th.setAttribute('data-dir', state.sort.dir);
+      state.page = 1;
+      render();
+    });
+  });
+}
+function sortRows(rows, sort){
+  if(!sort || !sort.key) return rows;
+  var k = sort.key, dir = sort.dir === 'desc' ? -1 : 1;
+  return rows.slice().sort(function(a, b){
+    var x = a[k], y = b[k];
+    var nx = (x === '' || x == null) ? null : Number(x);
+    var ny = (y === '' || y == null) ? null : Number(y);
+    if(nx !== null && ny !== null && !isNaN(nx) && !isNaN(ny)) return (nx - ny) * dir;
+    if(x == null || x === '') return 1;      // blanks always sink
+    if(y == null || y === '') return -1;
+    x = String(x).toLowerCase(); y = String(y).toLowerCase();
+    return x < y ? -dir : x > y ? dir : 0;
+  });
+}
+/* close any open dropdown menus on outside click */
+document.addEventListener('click', function(e){
+  if(!e.target.closest('.menu')){
+    document.querySelectorAll('.menu-list.open').forEach(function(m){ m.classList.remove('open'); });
+    document.querySelectorAll('.table-wrap.menu-open').forEach(function(w){ w.classList.remove('menu-open'); });
+  }
+});
+
+/* ---- close a modal by clicking its backdrop, or pressing Escape ---- */
+function dismissOverlay(ov){
+  if(!ov) return;
+  // the voice modal must stop playback, so it has its own closer
+  if(ov.id === 'mVoice' && typeof closeVoice === 'function'){ closeVoice(); return; }
+  ov.classList.remove('open');
+}
+document.addEventListener('mousedown', function(e){
+  // only a press that starts AND ends on the backdrop closes it, so a
+  // text selection dragged out of the modal does not dismiss the form
+  if(!e.target.classList.contains('overlay')) return;
+  var ov = e.target;
+  var up = function(ev){
+    document.removeEventListener('mouseup', up);
+    if(ev.target === ov) dismissOverlay(ov);
+  };
+  document.addEventListener('mouseup', up);
+});
+document.addEventListener('keydown', function(e){
+  if(e.key !== 'Escape') return;
+  var open = document.querySelectorAll('.overlay.open');
+  if(open.length) dismissOverlay(open[open.length - 1]);   // topmost only
+});
+</script>

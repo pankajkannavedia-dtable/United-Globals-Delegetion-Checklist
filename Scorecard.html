@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include('Style.html'); ?>
+</head>
+<body>
+<?!= include('Navbar.html'); ?>
+
+<div class="main">
+  <div class="page-head">
+    <div>
+      <div class="page-title">Scorecard</div>
+      <div class="page-sub">Who is delivering, and how much of it lands on time.</div>
+    </div>
+    <div class="head-actions">
+      <button class="btn btn-ghost" onclick="load()">&#8635; Refresh</button>
+      <button class="btn btn-ghost" onclick="exportCsv()">Export CSV</button>
+    </div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filter-card">
+    <div class="filter-bar">
+      <div class="fl">&#9776; Filters <span class="filter-count" id="filterCount" style="display:none;">0</span></div>
+      <div class="fr">
+        <button class="link-btn" onclick="clearFilters()">Clear all</button>
+        <button class="chev" id="filterToggle" onclick="toggleFilters()">Hide &#9650;</button>
+      </div>
+    </div>
+    <div class="filter-body" id="filterBody">
+      <div class="filters">
+        <div class="field combo">
+          <label for="fName">Doer</label>
+          <input type="text" id="fName" placeholder="All doers" autocomplete="off">
+          <div class="combo-list" id="fNameList"></div>
+        </div>
+        <div class="field combo">
+          <label for="fTask">Task</label>
+          <input type="text" id="fTask" placeholder="Search text" autocomplete="off">
+          <div class="combo-list" id="fTaskList"></div>
+        </div>
+                <div class="field">
+          <label for="fSource">Type</label>
+          <select id="fSource"><option value="">All</option>
+            <option value="Delegation">Delegation</option>
+            <option value="Checklist">Checklist</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fStatus">Status</label>
+          <select id="fStatus"><option value="">All</option>
+            <? for (var i = 0; i < cfg.STATUSES.length; i++) { ?><option><?= cfg.STATUSES[i] ?></option><? } ?>
+          </select>
+        </div>
+        <div class="field"><label for="fFrom">From</label><input type="date" id="fFrom"></div>
+        <div class="field"><label for="fTo">To</label><input type="date" id="fTo"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOP PERFORMERS -->
+  <div class="card card-pad" style="margin-bottom:14px;">
+    <div class="card-title" style="margin-bottom:12px;">Top performers</div>
+    <div class="leaderboard">
+      <div class="podium" id="podium"></div>
+      <div id="runners" style="display:grid;gap:10px;"></div>
+    </div>
+    <div class="empty" id="boardEmpty" style="display:none;padding:26px;">
+      <span class="ei">&#127942;</span>No completed tasks in this range yet.
+    </div>
+  </div>
+
+  <!-- OVERALL -->
+  <div class="card card-pad" style="margin-bottom:14px;">
+    <div class="score-hero">
+      <div class="donut" id="donut"></div>
+      <div class="tiles" style="margin:0;">
+        <div class="tile"><div class="ti">&#128203;</div><div><div class="tv" id="sTotal">0</div><div class="tl">Total tasks</div></div></div>
+        <div class="tile green"><div class="ti">&#10003;</div><div><div class="tv" id="sCompleted">0</div><div class="tl">Completed</div></div></div>
+        <div class="tile amber"><div class="ti">&#9203;</div><div><div class="tv" id="sPending">0</div><div class="tl">Pending</div></div></div>
+        <div class="tile red"><div class="ti">&#9888;</div><div><div class="tv" id="sOverdue">0</div><div class="tl">Overdue</div></div></div>
+        <div class="tile blue"><div class="ti">&#128337;</div><div><div class="tv" id="sWithin">0</div><div class="tl">Within limit</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FULL TABLE -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">Every doer</div>
+      <div id="countInfo" style="font-size:12px;color:var(--muted);"></div>
+    </div>
+    <div class="loading show" id="loading"><div class="spinner"></div>Building the scorecard…</div>
+    <div class="table-wrap" id="tableWrap" style="display:none;">
+      <table class="data" id="scoreTable">
+        <thead><tr>
+          <th data-key="rank">Rank</th>
+          <th data-key="name">Doer</th>
+          <th data-key="completedAll">Tasks completed</th>
+          <th data-key="total">Total tasks</th>
+          <th data-key="pct">Completion %</th>
+          <th data-key="completed">On time</th>
+          <th data-key="delayed">With delay</th>
+          <th data-key="overdue">Overdue</th>
+          <th data-key="within">Within limit</th>
+          <th data-key="avgTat">Avg TAT (days)</th>
+          <th data-key="pct">Performance</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="emptyState" style="display:none;">
+      <span class="ei">&#128202;</span>No matching records found. Widen your filters to see performance.
+    </div>
+  </div>
+
+  <!-- PERSON TASK LIST — one-time + recurring, combined -->
+  <div class="card" style="margin-top:14px;">
+    <div class="card-head">
+      <div class="card-title">Task details</div>
+      <div id="taskListInfo" style="font-size:12px;color:var(--muted);"></div>
+    </div>
+    <div class="table-wrap">
+      <table class="data" id="taskListTable">
+        <thead><tr>
+          <th>ID</th><th>Type</th><th>Doer</th><th>Task</th>
+          <th>Planned</th><th>Status</th><th>Priority</th>
+        </tr></thead>
+        <tbody id="taskListBody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="taskListEmpty" style="display:none;">
+      <span class="ei">&#128203;</span>No tasks match the current filters.
+    </div>
+  </div>
+</div>
+
+<script>
+var state = { all:[], filtered:[], doers:[], rows:[], sort:null };
+
+var LOADED = false;
+function load(){
+  var box = document.getElementById('loading');
+  var tw  = document.getElementById('tableWrap');
+  if(!LOADED) box.classList.add('show'); else tw.classList.add('is-refreshing');
+  var done = function(){ box.classList.remove('show'); tw.classList.remove('is-refreshing'); };
+  google.script.run
+    .withSuccessHandler(function(data){
+      state.doers = data.doers; state.all = data.tasks;
+      applyFilters(); LOADED = true; done();
+    })
+    .withFailureHandler(function(e){ done(); toast(e.message, true); })
+    .getScorecardBootstrap('all');
+}
+
+var FILTER_IDS = ['fName','fTask','fSource','fStatus','fFrom','fTo'];
+FILTER_IDS.forEach(function(id){ document.getElementById(id).addEventListener('change', applyFilters); });
+function toggleFilters(){
+  var b = document.getElementById('filterBody'), t = document.getElementById('filterToggle');
+  var hidden = b.style.display === 'none';
+  b.style.display = hidden ? 'block' : 'none';
+  t.innerHTML = hidden ? 'Hide &#9650;' : 'Show &#9660;';
+}
+function clearFilters(){ FILTER_IDS.forEach(function(id){ document.getElementById(id).value=''; }); applyFilters(); }
+
+/* classification per spec */
+function classify(t){
+  var actual  = t.actualDate ? t.actualDate.slice(0,10) : '';
+  var planned = t.currentDate;
+  var today   = todayStr();
+  if(actual) return (planned && actual > planned) ? 'delayed' : 'completed';
+  if(planned && planned < today) return 'overdue';
+  return 'within';
+}
+function tatDays(t){
+  if(!t.actualDate || !t.timestamp) return null;
+  var a = new Date(t.actualDate.slice(0,10)), s = new Date(t.timestamp.slice(0,10));
+  if(isNaN(a) || isNaN(s)) return null;
+  return Math.max(0, Math.round((a - s) / 86400000));
+}
+
+function applyFilters(){
+  var name = document.getElementById('fName').value.trim().toLowerCase();
+  var task = document.getElementById('fTask').value.trim().toLowerCase();
+  var src  = document.getElementById('fSource').value;
+  var st   = document.getElementById('fStatus').value;
+  var from = document.getElementById('fFrom').value;
+  var to   = document.getElementById('fTo').value;
+
+  state.filtered = state.all.filter(function(t){
+    if(name && t.assignedTo.toLowerCase().indexOf(name) === -1) return false;
+    if(task && t.task.toLowerCase().indexOf(task) === -1) return false;
+    if(src && t.source !== src) return false;
+    if(st && t.status !== st) return false;
+    if(from && (!t.currentDate || t.currentDate < from)) return false;
+    if(to   && (!t.currentDate || t.currentDate > to))   return false;
+    return true;
+  });
+
+  var n = FILTER_IDS.filter(function(id){ return document.getElementById(id).value.trim() !== ''; }).length;
+  var badge = document.getElementById('filterCount');
+  badge.style.display = n ? 'inline-block' : 'none';
+  badge.textContent = n;
+
+  aggregate(); render();
+}
+
+function aggregate(){
+  var map = {}, order = 0;
+  state.filtered.forEach(function(t){
+    var k = t.assignedTo || 'Unassigned';
+    if(!map[k]) map[k] = { name:k, total:0, completed:0, delayed:0, overdue:0, within:0, tat:[], order:order++ };
+    var r = map[k];
+    r.total++;
+    r[classify(t)]++;
+    var d = tatDays(t); if(d !== null) r.tat.push(d);
+  });
+  state.rows = Object.keys(map).map(function(k){
+    var r = map[k];
+    r.completedAll = r.completed + r.delayed;             // every task the doer finished
+    r.pct    = r.total ? Math.round((r.completedAll / r.total) * 100) : 0;
+    r.avgTat = r.tat.length ? Number((r.tat.reduce(function(a,b){return a+b;},0)/r.tat.length).toFixed(1)) : '';
+    return r;
+  }).sort(function(a,b){
+    return b.completedAll - a.completedAll || b.pct - a.pct || a.order - b.order;
+  });
+  state.rows.forEach(function(r,i){ r.rank = i + 1; });
+}
+
+function perfBadge(p){
+  if(p >= 90) return '<span class="perf exc">Excellent</span>';
+  if(p >= 75) return '<span class="perf good">Good</span>';
+  if(p >= 50) return '<span class="perf avg">Needs focus</span>';
+  return '<span class="perf low">At risk</span>';
+}
+
+function render(){
+  var f = state.filtered;
+  var counts = { completed:0, delayed:0, overdue:0, within:0 };
+  f.forEach(function(t){ counts[classify(t)]++; });
+  var total = f.length;
+  var done = counts.completed + counts.delayed;
+  var pct = total ? Math.round((done/total)*100) : 0;
+
+  document.getElementById('sTotal').textContent     = total;
+  document.getElementById('sCompleted').textContent = done;
+  document.getElementById('sPending').textContent   = counts.overdue + counts.within;
+  document.getElementById('sOverdue').textContent   = counts.overdue;
+  document.getElementById('sWithin').textContent    = counts.within;
+  document.getElementById('countInfo').textContent  = state.rows.length + ' doers · ' + total + ' tasks';
+
+  /* donut */
+  var color = pct >= 90 ? 'var(--green)' : pct >= 70 ? 'var(--amber)' : 'var(--red)';
+  var R = 72, C = 2 * Math.PI * R;
+  document.getElementById('donut').innerHTML =
+    '<svg width="168" height="168" viewBox="0 0 168 168">' +
+      '<circle cx="84" cy="84" r="'+R+'" fill="none" stroke="var(--line)" stroke-width="15"></circle>' +
+      '<circle cx="84" cy="84" r="'+R+'" fill="none" stroke="'+color+'" stroke-width="15" stroke-linecap="round" ' +
+        'stroke-dasharray="'+C+'" stroke-dashoffset="'+(C - C*pct/100)+'"></circle>' +
+    '</svg>' +
+    '<div class="dval"><div class="dnum">'+pct+'%</div><div class="dlab">Overall completion</div></div>';
+
+  /* ---- TOP 5 ---- */
+  var top = state.rows.slice(0, 5);
+  var board = document.getElementById('boardEmpty');
+  if(!top.length){
+    board.style.display = 'block';
+    document.getElementById('podium').innerHTML = '';
+    document.getElementById('runners').innerHTML = '';
+  } else {
+    board.style.display = 'none';
+    var medals = ['\uD83E\uDD47','\uD83E\uDD48','\uD83E\uDD49'];
+    document.getElementById('podium').innerHTML = top.slice(0,3).map(function(r,i){
+      return '<div class="rank-card r'+(i+1)+'" data-medal="'+medals[i]+'">' +
+        '<div class="rpos">Rank '+(i+1)+'</div>' +
+        '<div class="rname">'+esc(r.name)+'</div>' +
+        '<div class="rbig">'+r.completedAll+' <span style="font-size:12px;font-weight:600;opacity:.9;">tasks completed</span></div>' +
+        '<div class="rmeta">of '+r.total+' assigned · '+r.pct+'% completion</div>' +
+        '<div class="rbar"><i style="width:'+r.pct+'%"></i></div>' +
+      '</div>';
+    }).join('');
+    document.getElementById('runners').innerHTML = top.slice(3).map(function(r){
+      return '<div class="runner">' +
+        '<div class="rnum">'+r.rank+'</div>' +
+        '<div class="rinfo">' +
+          '<div class="rn">'+esc(r.name)+'</div>' +
+          '<div class="rs">'+r.completedAll+' of '+r.total+' tasks completed</div>' +
+          '<div class="rbar"><i style="width:'+r.pct+'%"></i></div>' +
+        '</div>' +
+        '<div class="rpct">'+r.pct+'%</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* ---- full table ---- */
+  if(!state.rows.length){
+    document.getElementById('tableWrap').style.display='none';
+    document.getElementById('emptyState').style.display='block'; return;
+  }
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('tableWrap').style.display='block';
+
+  var allTat = f.map(tatDays).filter(function(d){ return d !== null; });
+  var summary =
+    '<tr class="summary-row">' +
+      '<td>—</td><td>Overall summary</td><td>'+done+'</td><td>'+total+'</td><td>'+pct+'%</td>' +
+      '<td>'+counts.completed+'</td><td>'+counts.delayed+'</td><td>'+counts.overdue+'</td><td>'+counts.within+'</td>' +
+      '<td>'+(allTat.length ? (allTat.reduce(function(a,b){return a+b;},0)/allTat.length).toFixed(1) : '—')+'</td>' +
+      '<td>'+perfBadge(pct)+'</td></tr>';
+
+  document.getElementById('tbody').innerHTML = summary + sortRows(state.rows, state.sort).map(function(r){
+    var medal = r.rank === 1 ? '\uD83E\uDD47' : r.rank === 2 ? '\uD83E\uDD48' : r.rank === 3 ? '\uD83E\uDD49' : '';
+    return '<tr>' +
+      '<td class="nowrap"><strong>'+r.rank+'</strong> '+medal+'</td>' +
+      '<td><span class="chip"><span class="ca">'+initials(r.name)+'</span>'+esc(r.name)+'</span></td>' +
+      '<td><strong>'+r.completedAll+'</strong></td><td>'+r.total+'</td>' +
+      '<td><strong>'+r.pct+'%</strong></td>' +
+      '<td>'+r.completed+'</td><td>'+r.delayed+'</td><td>'+r.overdue+'</td><td>'+r.within+'</td>' +
+        '<td>'+(r.avgTat === '' ? '—' : r.avgTat)+'</td>' +
+      '<td>'+perfBadge(r.pct)+'</td></tr>';
+  }).join('');
+
+  renderTaskList();
+}
+
+function renderTaskList(){
+  var f = sortRows(state.filtered, {key:'currentDate', dir:'asc'});
+  document.getElementById('taskListInfo').textContent = f.length + ' task(s)';
+  if(!f.length){
+    document.getElementById('taskListTable').style.display = 'none';
+    document.getElementById('taskListEmpty').style.display = 'block';
+    return;
+  }
+  document.getElementById('taskListTable').style.display = 'table';
+  document.getElementById('taskListEmpty').style.display = 'none';
+  document.getElementById('taskListBody').innerHTML = f.map(function(t){
+    return '<tr>' +
+      '<td><span class="badge b-id">'+esc(t.taskId)+'</span></td>' +
+      '<td><span class="badge b-count">'+esc(t.source)+'</span></td>' +
+      '<td><span class="chip"><span class="ca">'+initials(t.assignedTo)+'</span>'+esc(t.assignedTo)+'</span></td>' +
+      '<td class="cell-task">'+nl2br(t.task)+'</td>' +
+      '<td class="nowrap">'+prettyDate(t.currentDate)+'</td>' +
+      '<td><span class="badge '+statusClass(t.status)+'">'+esc(t.status)+'</span></td>' +
+      '<td><span class="badge '+priorityClass(t.priority)+'">'+esc(t.priority)+'</span></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function exportCsv(){
+  if(!state.rows.length){ toast('Nothing to export.', true); return; }
+  var head = ['Rank','Doer','Tasks Completed','Total Tasks','Completion %','On Time','With Delay',
+              'Pending Overdue','Pending Within Limit','Avg TAT (days)'];
+  var rows = [head].concat(state.rows.map(function(r){
+    return [r.rank, r.name, r.completedAll, r.total, r.pct + '%', r.completed, r.delayed, r.overdue, r.within, r.avgTat];
+  }));
+  downloadCSV(rows, 'scorecard-' + todayStr() + '.csv');
+}
+
+wireCombo('fName','fNameList', function(){ return state.doers.map(function(d){ return d.name; }); }, applyFilters);
+wireCombo('fTask','fTaskList', function(){
+  var seen = {};
+  return state.all.map(function(t){ return t.task; }).filter(function(v){ if(!v||seen[v]) return false; seen[v]=1; return true; });
+}, applyFilters);
+
+wireSort('scoreTable', state, render);
+document.getElementById('fTo').value = todayStr();   // default view: up to today, not future-scheduled work
+load();
+</script>
+</body>
+</html>

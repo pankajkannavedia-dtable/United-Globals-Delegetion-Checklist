@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include('Style.html'); ?>
+</head>
+<body>
+<?!= include('Navbar.html'); ?>
+
+<div class="main">
+  <div class="page-head">
+    <div>
+      <div class="page-title">Doer Dashboard</div>
+      <div class="page-sub">Update your dates or send work for approval.</div>
+    </div>
+   <div class="head-actions">
+      <button class="btn btn-ghost" onclick="load()">&#8635; Refresh</button>
+      <button class="btn btn-ghost" id="pastDueBtn" onclick="togglePastDue()">Past due tasks</button>
+      <button class="btn btn-ghost" onclick="exportCsv()">Export CSV</button>
+    </div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filter-card">
+    <div class="filter-bar">
+      <div class="fl">&#9776; Filters <span class="filter-count" id="filterCount" style="display:none;">0</span></div>
+      <div class="fr">
+        <button class="link-btn" onclick="clearFilters()">Clear all</button>
+        <button class="chev" id="filterToggle" onclick="toggleFilters()">Hide &#9650;</button>
+      </div>
+    </div>
+    <div class="filter-body" id="filterBody">
+      <div class="filters">
+        <div class="field combo">
+          <label for="fName">Doer</label>
+          <input type="text" id="fName" placeholder="All doers" autocomplete="off">
+          <div class="combo-list" id="fNameList"></div>
+        </div>
+        <div class="field combo">
+          <label for="fTask">Task</label>
+          <input type="text" id="fTask" placeholder="Search text" autocomplete="off">
+          <div class="combo-list" id="fTaskList"></div>
+        </div>
+        <div class="field">
+          <label for="fStatus">Status</label>
+          <select id="fStatus"><option value="">All</option>
+            <? for (var i = 0; i < cfg.STATUSES.length; i++) { ?><option><?= cfg.STATUSES[i] ?></option><? } ?>
+          </select>
+        </div>
+        <div class="field"><label for="fFrom">Planned from</label><input type="date" id="fFrom"></div>
+        <div class="field"><label for="fTo">Planned to</label><input type="date" id="fTo"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tiles">
+    <div class="tile"><div class="ti">📋</div><div><div class="tv" id="sCurrent">0</div><div class="tl">Current &amp; past tasks</div></div></div>
+    <div class="tile blue"><div class="ti">↻</div><div><div class="tv" id="sRevisions">0</div><div class="tl">Total revisions</div></div></div>
+    <div class="tile red"><div class="ti">⚠</div><div><div class="tv" id="sOverdue">0</div><div class="tl">Overdue tasks</div></div></div>
+    <div class="tile purple"><div class="ti">⏱</div><div><div class="tv" id="sWaiting">0</div><div class="tl">Awaiting approval</div></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">My tasks</div>
+      <div id="countInfo" style="font-size:12.5px;color:#868da8;"></div>
+    </div>
+    <div class="loading show" id="loading"><div class="spinner"></div>Loading your tasks…</div>
+    <div class="table-wrap" id="tableWrap" style="display:none;">
+      <table class="data" id="myTable">
+              <thead><tr>
+          <th></th><th data-key="taskId">ID</th><th data-key="task">Task</th>
+          <th data-key="assignedBy">Assigned by</th><th data-key="assignedTo">Assigned to</th>
+          <th data-key="currentDate">Planned</th><th data-key="revision1">Revision</th>
+          <th data-key="status">Status</th><th data-key="priority">Priority</th>
+          <th>Voice note</th><th>Task log</th><th data-key="proofReq">Proof req.</th><th>Files</th>
+          <th>Verify</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="emptyState" style="display:none;">
+      <span class="ei">✅</span>No matching records found. Nothing needs your attention right now.
+    </div>
+    <div class="pager" id="pager" style="display:none;">
+      <div id="pageInfo" style="font-size:12.5px;color:#868da8;"></div>
+      <div class="pctrl">
+        <select id="pageSize" onchange="setPageSize(this.value)"><option>10</option><option>25</option><option>50</option><option>100</option></select>
+        <button class="pbtn" id="prevBtn" onclick="gotoPage(state.page-1)">‹</button>
+        <span id="pageNums" style="display:flex;gap:5px;"></span>
+        <button class="pbtn" id="nextBtn" onclick="gotoPage(state.page+1)">›</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ REASSIGN ============ -->
+<div class="overlay" id="mReassign">
+  <div class="modal">
+    <div class="modal-head"><h3>Reassign task</h3><button class="modal-close" onclick="closeModal('mReassign')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="reassignAlert"></div>
+      <div class="field"><label>Task</label><div class="readout" id="rTaskInfo"></div></div>
+      <div class="field"><label>Currently with</label><div class="readout" id="rCurrent"></div></div>
+      <div class="field combo">
+        <label class="required" for="rDoer">New doer</label>
+        <input type="text" id="rDoer" placeholder="Search a doer" autocomplete="off">
+        <div class="combo-list" id="rDoerList"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mReassign')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitReassign(this)">Reassign</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TASK LOG ============ -->
+<div class="overlay" id="mLog">
+  <div class="modal">
+    <div class="modal-head"><h3 id="logTitle">Task log</h3><button class="modal-close" onclick="closeModal('mLog')">&times;</button></div>
+    <div class="modal-body"><div class="timeline" id="logBody"></div></div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('mLog')">Close</button></div>
+  </div>
+</div>
+<!-- ============ VOICE NOTE ============ -->
+<div class="overlay" id="mVoice">
+  <div class="modal slim">
+    <div class="modal-head"><h3>Voice note</h3><button class="modal-close" onclick="closeVoice()">&times;</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Recorded by</label><div class="readout" id="vBy"></div></div>
+      <div id="vPlayer"></div>
+      <a id="vOpen" href="#" target="_blank" class="link-btn">Open in Google Drive &rarr;</a>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeVoice()">Close</button></div>
+  </div>
+</div>
+
+<!-- ============ CONFIRM (verify) ============ -->
+<div class="overlay" id="mConfirm">
+  <div class="modal slim">
+    <div class="modal-head"><h3 id="cfTitle">Confirm</h3><button class="modal-close" onclick="closeModal('mConfirm')">&times;</button></div>
+    <div class="modal-body">
+      <p id="cfText" style="font-size:13.5px;color:var(--body);"></p>
+      <div class="field" id="cfReasonWrap" style="display:none;">
+        <label class="required" for="cfReason">Reason</label>
+        <textarea id="cfReason" placeholder="Explain why this is being sent back"></textarea>
+      </div>
+      <div class="alert" id="cfAlert"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mConfirm')">Cancel</button>
+      <button class="btn btn-danger" id="cfOk">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var ME = <?!= JSON.stringify(user) ?>;
+var state = { all:[], filtered:[], doers:[], page:1, size:10, sort:{key:'currentDate',dir:'asc'}, openId:null, pastDue:false };
+var proofFiles = {};   // taskId -> File
+
+var LOADED = false;
+function load(){
+  var box = document.getElementById('loading');
+  var tw  = document.getElementById('tableWrap');
+  if(!LOADED) box.classList.add('show'); else tw.classList.add('is-refreshing');
+  var done = function(){ box.classList.remove('show'); tw.classList.remove('is-refreshing'); };
+  google.script.run
+    .withSuccessHandler(function(data){
+      state.doers = data.doers;
+      state.all = data.tasks;
+      applyFilters();
+      LOADED = true; done();
+    })
+    .withFailureHandler(function(e){ done(); toast(e.message, true); })
+    .getBootstrap('all');
+}
+
+var FILTER_IDS = ['fName','fTask','fStatus','fFrom','fTo'];
+FILTER_IDS.forEach(function(id){ document.getElementById(id).addEventListener('change', applyFilters); });
+function toggleFilters(){
+  var b = document.getElementById('filterBody'), t = document.getElementById('filterToggle');
+  var hidden = b.style.display === 'none';
+  b.style.display = hidden ? 'block' : 'none';
+  t.innerHTML = hidden ? 'Hide &#9650;' : 'Show &#9660;';
+}
+
+/* every log entry across reason / MD / EA, newest first */
+function taskLog(t){
+  var out = [];
+  parseRemarks(t.reason).forEach(function(i){ i.tag = 'Status'; out.push(i); });
+  parseRemarks(t.mdRemark).forEach(function(i){ i.tag = 'MD'; out.push(i); });
+  parseRemarks(t.eaRemark).forEach(function(i){ i.tag = 'EA'; out.push(i); });
+  return out.sort(function(a,b){ return (b.when||'').localeCompare(a.when||''); });
+}
+function openLog(id){
+  var t = taskById(id); if(!t) return;
+  document.getElementById('logTitle').textContent = 'Task log — ' + t.taskId;
+  var items = taskLog(t);
+  document.getElementById('logBody').innerHTML = items.length
+    ? items.map(function(it){
+        return '<div class="tl-item '+it.kind+'"><div class="tl-meta"><span class="tl-tag">'+esc(it.tag)+'</span>' +
+               esc(it.when) + (it.who ? ' · ' + esc(it.who) : '') + '</div><div class="tl-text">'+esc(it.text)+'</div></div>';
+      }).join('')
+    : '<div class="empty">Nothing recorded yet.</div>';
+  openModal('mLog');
+}
+function taskById(id){ return state.all.filter(function(t){ return t.taskId === id; })[0]; }
+
+/* ---- voice note ---- */
+function voiceCell(t){
+  if(!t.voiceNote) return '<span class="dash">—</span>';
+  var who = t.voiceBy || 'Unknown';
+  var when = t.voiceAt ? prettyDate(t.voiceAt.slice(0,10)) + ' ' + t.voiceAt.slice(11) : '';
+  return '<div class="voice-cell">' +
+    '<button class="icon-btn" data-tip="Play voice note" onclick="openVoice(\''+t.taskId+'\')">&#9654;</button>' +
+    '<span><button class="link-btn" onclick="openVoice(\''+t.taskId+'\')">'+esc(who)+'</button>' +
+    (when ? '<span class="sub">'+esc(when)+'</span>' : '') + '</span></div>';
+}
+function openVoice(id){
+  var t = taskById(id); if(!t || !t.voiceNote) return;
+  var when = t.voiceAt ? ' · ' + prettyDate(t.voiceAt.slice(0,10)) + ' at ' + t.voiceAt.slice(11) : '';
+  document.getElementById('vBy').textContent = (t.voiceBy || 'Unknown') + when;
+  document.getElementById('vOpen').href = t.voiceNote;
+  document.getElementById('vPlayer').innerHTML = t.voiceId
+    ? '<iframe class="voice-frame" src="https://drive.google.com/file/d/'+esc(t.voiceId)+'/preview" allow="autoplay"></iframe>'
+    : '<div class="readout">Preview unavailable — open the file in Drive.</div>';
+  openModal('mVoice');
+}
+function closeVoice(){ document.getElementById('vPlayer').innerHTML = ''; closeModal('mVoice'); }
+
+/* ---- verify (approve / send back) ---- */
+function confirmAction(title, text, needReason, onOk){
+  document.getElementById('cfTitle').textContent = title;
+  document.getElementById('cfText').textContent = text;
+  document.getElementById('cfReasonWrap').style.display = needReason ? 'flex' : 'none';
+  document.getElementById('cfReason').value = '';
+  hideAlert('cfAlert');
+  var ok = document.getElementById('cfOk');
+  var fresh = ok.cloneNode(true);
+  ok.parentNode.replaceChild(fresh, ok);
+  fresh.addEventListener('click', function(){
+    var reason = document.getElementById('cfReason').value.trim();
+    if(needReason && !reason){ showAlert('cfAlert','Enter a reason.'); return; }
+    busy(fresh, true, 'Working…');
+    onOk(reason, fresh);
+  });
+  openModal('mConfirm');
+}
+function runAction(fnName, args, btn){
+  var r = google.script.run
+    .withSuccessHandler(function(res){ busy(btn,false); closeModal('mConfirm'); toast(res.message); load(); })
+    .withFailureHandler(function(e){ busy(btn,false); showAlert('cfAlert', e.message); });
+  r[fnName].apply(r, args);
+}
+function doApprove(id){
+  confirmAction('Approve task', 'Approve task ' + id + ' and close it?', false, function(_, btn){
+    runAction('approveTask', [id], btn); });
+}
+function doDisapprove(id){
+  confirmAction('Send task back', 'Send task ' + id + ' back to the doer for rework.', true, function(reason, btn){
+    runAction('disapproveTask', [id, reason], btn); });
+}
+
+/* ---- reassign ---- */
+var reassignId = null;
+function openReassign(id){
+  var t = taskById(id); if(!t) return;
+  reassignId = id; hideAlert('reassignAlert');
+  document.getElementById('rTaskInfo').textContent = t.taskId + ' — ' + t.task;
+  document.getElementById('rCurrent').textContent = t.assignedTo;
+  document.getElementById('rDoer').value = '';
+  openModal('mReassign');
+}
+function submitReassign(btn){
+  var doer = document.getElementById('rDoer').value.trim();
+  if(!doer){ showAlert('reassignAlert','Choose the new doer.'); return; }
+  busy(btn, true, 'Reassigning…');
+  google.script.run
+    .withSuccessHandler(function(res){ busy(btn,false); closeModal('mReassign'); toast(res.message); load(); })
+    .withFailureHandler(function(e){ busy(btn,false); showAlert('reassignAlert', e.message); })
+    .reassignTask(reassignId, doer);
+}
+function clearFilters(){
+  FILTER_IDS.forEach(function(id){ document.getElementById(id).value=''; });
+  state.pastDue = false;
+  document.getElementById('pastDueBtn').classList.remove('btn-warn');
+  applyFilters();
+}
+function togglePastDue(){
+  state.pastDue = !state.pastDue;
+  var b = document.getElementById('pastDueBtn');
+  b.className = 'btn ' + (state.pastDue ? 'btn-warn' : 'btn-ghost');
+  applyFilters();
+}
+
+function applyFilters(){
+  var name = document.getElementById('fName').value.trim().toLowerCase();
+  var task = document.getElementById('fTask').value.trim().toLowerCase();
+  var st   = document.getElementById('fStatus').value;
+  var from = document.getElementById('fFrom').value;
+  var to   = document.getElementById('fTo').value;
+  var today = todayStr();
+
+  state.filtered = state.all.filter(function(t){
+    // Completed AND Approval-Waiting tasks stay off the dashboard by default —
+    // once a doer marks a task done, it should only appear on the Verification tab.
+    if(!st && (t.status === 'Completed' || t.status === 'Approval Waiting')) return false;
+    if(name && t.assignedTo.toLowerCase().indexOf(name) === -1) return false;
+    if(task && t.task.toLowerCase().indexOf(task) === -1) return false;
+    if(st && t.status !== st) return false;
+    if(from && (!t.currentDate || t.currentDate < from)) return false;
+    if(to   && (!t.currentDate || t.currentDate > to))   return false;
+    if(state.pastDue && !(t.currentDate && t.currentDate < today && t.status === 'Pending')) return false;
+    return true;
+  });
+  var n = FILTER_IDS.filter(function(id){ return document.getElementById(id).value.trim() !== ''; }).length;
+  var badge = document.getElementById('filterCount');
+  badge.style.display = n ? 'inline-block' : 'none';
+  badge.textContent = n;
+
+  state.page = 1; state.openId = null;
+  renderStats(); renderTable();
+}
+
+function renderStats(){
+  var f = state.filtered, today = todayStr();
+  document.getElementById('sCurrent').textContent = f.length;
+  document.getElementById('sRevisions').textContent = f.reduce(function(a,t){ return a + (t.revisions||0); }, 0);
+  document.getElementById('sOverdue').textContent =
+    f.filter(function(t){ return t.status === 'Pending' && t.currentDate && t.currentDate < today; }).length;
+  document.getElementById('sWaiting').textContent =
+    f.filter(function(t){ return t.status === 'Approval Waiting'; }).length;
+  document.getElementById('countInfo').textContent = f.length + ' of ' + state.all.length + ' tasks';
+}
+
+function fileIcons(urls, icon, tip){
+  if(!urls || !urls.length) return '<span style="color:#868da8">—</span>';
+  return urls.map(function(u,i){
+    return '<a href="'+esc(u)+'" target="_blank" class="icon-btn" data-tip="'+tip+' '+(i+1)+'">'+icon+'</a>';
+  }).join(' ');
+}
+
+function renderTable(){
+  var tb = document.getElementById('tbody');
+  if(!state.filtered.length){
+    document.getElementById('tableWrap').style.display='none';
+    document.getElementById('pager').style.display='none';
+    document.getElementById('emptyState').style.display='block';
+    return;
+  }
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('tableWrap').style.display='block';
+  document.getElementById('pager').style.display='flex';
+
+  var sorted = sortRows(state.filtered, state.sort);
+  var start = (state.page-1)*state.size;
+  var rows = sorted.slice(start, start+state.size);
+  var today = todayStr();
+tb.innerHTML = rows.map(function(t){
+    var open = state.openId === t.taskId;
+    var editable = t.status === 'Pending' || t.status === 'Shifted';
+    var overdue = t.status === 'Pending' && t.currentDate && t.currentDate < today;
+    var canManage = ME.accessLevel === 'ADMIN' || t.canManage;
+    var mine = t.assignedTo.trim().toLowerCase() === ME.name.trim().toLowerCase();
+    var logCount = taskLog(t).length;
+    var main =
+      '<tr>' +
+        '<td><button class="icon-btn" data-tip="'+(open?'Collapse':'Update')+'" onclick="toggleRow(\''+t.taskId+'\')">'+(open?'&#9662;':'&#9656;')+'</button></td>' +
+        '<td><span class="badge b-id">'+esc(t.taskId)+'</span></td>' +
+       '<td class="cell-task">'+nl2br(t.task)+'</td>' +
+        '<td><span class="chip"><span class="ca">'+initials(t.assignedBy)+'</span>'+esc(t.assignedBy)+'</span></td>' +
+        '<td><span class="chip"><span class="ca">'+initials(t.assignedTo)+'</span>'+esc(t.assignedTo)+'</span>' +
+          (canManage ? ' <button class="link-btn" onclick="openReassign(\''+t.taskId+'\')">Reassign</button>' : '') + '</td>' +
+        '<td class="nowrap">'+prettyDate(t.currentDate)+(overdue?'<span class="sub" style="color:var(--red)">Overdue</span>':'')+'</td>' +
+        '<td class="nowrap">'+(t.revision1 ? prettyDate(t.revision1) : '<span class="dash">—</span>')+'</td>' +
+        '<td><span class="badge '+statusClass(t.status)+'">'+esc(t.status)+'</span></td>' +
+        '<td><span class="badge '+priorityClass(t.priority)+'">'+esc(t.priority)+'</span></td>' +
+        '<td>'+voiceCell(t)+'</td>' +
+        '<td class="nowrap">'+(logCount
+            ? '<button class="link-btn" onclick="openLog(\''+t.taskId+'\')">View <span class="badge b-count">'+logCount+'</span></button>'
+            : '<span class="dash">—</span>')+'</td>' +
+        '<td><span class="badge '+(t.proofReq==='Yes'?'b-yes':'b-no')+'">'+t.proofReq+'</span></td>' +
+                '<td class="nowrap">'+fileIcons(t.documents,'&#128206;','Document')+'</td>' +
+                '<td><span class="dash">—</span></td>' +
+      '</tr>';
+
+    if(!open) return main;
+
+       var minDate = today;
+    var panel =
+      '<tr class="expand-row"><td colspan="14"><div class="expand-inner">' +
+        '<div class="alert" id="al_'+key(t.taskId)+'"></div>' +
+        (editable ? '' : '<div class="alert alert-info show">This task is '+esc(t.status)+
+                          ' — it can no longer be edited here.</div>') +
+        '<div class="expand-grid">' +
+          '<div class="field"><label for="d_'+key(t.taskId)+'">New date</label>' +
+            '<input type="date" id="d_'+key(t.taskId)+'" value="'+esc(t.currentDate||today)+'" min="'+minDate+'" '+(editable?'':'disabled')+'>' +
+            '<span class="hint">Shifting the date requires a reason. The Task ID will remain the same.</span>' +
+          '</div>' +
+          '<div class="field"><label for="r_'+key(t.taskId)+'">Reason</label>' +
+            '<textarea id="r_'+key(t.taskId)+'" placeholder="Required when moving to a different week" '+(editable?'':'disabled')+'></textarea></div>' +
+          '<div class="field"><label for="m_'+key(t.taskId)+'">Remark</label>' +
+            '<textarea id="m_'+key(t.taskId)+'" placeholder="Optional note for your manager" '+(editable?'':'disabled')+'></textarea></div>' +
+          '<div class="field"><label>Proof image'+(t.proofReq==='Yes'?' (required)':'')+'</label>' +
+            '<div class="drop" onclick="document.getElementById(\'p_'+key(t.taskId)+'\').click()" id="pd_'+key(t.taskId)+'">Click to upload proof</div>' +
+            '<input type="file" accept="image/*" id="p_'+key(t.taskId)+'" style="display:none" onchange="pickProof(\''+t.taskId+'\', this)">' +
+            (t.proofUrl ? '<a href="'+esc(t.proofUrl)+'" target="_blank" class="hint">View existing proof</a>' : '') +
+          '</div>' +
+        '</div>' +
+        (editable ? '<div class="expand-actions">' +
+          '<button class="btn btn-primary" onclick="submitUpdate(\''+t.taskId+'\', this)">Update date</button>' +
+          '<button class="btn btn-success" onclick="submitComplete(\''+t.taskId+'\', this)">Mark complete</button>' +
+          '<button class="btn btn-ghost" onclick="toggleRow(\''+t.taskId+'\')">Close</button>' +
+        '</div>' : '') +
+      '</div></td></tr>';
+
+    return main + panel;
+  }).join('');
+
+  renderPager();
+}
+
+function key(id){ return id.replace(/\W/g,''); }
+function nextMonday(from){
+  var d = new Date(from || todayStr());
+  var day = d.getDay();
+  d.setDate(d.getDate() + (day === 0 ? 1 : 8 - day));
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function toggleRow(id){ state.openId = state.openId === id ? null : id; renderTable(); }
+function pickProof(id, input){
+  if(input.files[0]){
+    proofFiles[id] = input.files[0];
+    document.getElementById('pd_'+key(id)).textContent = input.files[0].name;
+  }
+}
+
+function submitUpdate(id, btn){
+  var date   = document.getElementById('d_'+key(id)).value;
+  var reason = document.getElementById('r_'+key(id)).value.trim();
+  var remark = document.getElementById('m_'+key(id)).value.trim();
+  if(!date){ showAlert('al_'+key(id), 'Choose a date.'); return; }
+  hideAlert('al_'+key(id));
+  busy(btn, true, 'Saving…');
+  google.script.run
+    .withSuccessHandler(function(res){ busy(btn,false); toast(res.message); load(); })
+    .withFailureHandler(function(e){ busy(btn,false); showAlert('al_'+key(id), e.message); })
+    .updateTaskDate(id, date, reason, remark);
+}
+
+function submitComplete(id, btn){
+  var t = state.all.filter(function(x){ return x.taskId === id; })[0];
+  var remark = document.getElementById('m_'+key(id)).value.trim();
+  var file = proofFiles[id];
+  var today = todayStr();
+
+  if(t.proofReq === 'Yes' && !file && !t.proofUrl){
+    showAlert('al_'+key(id), 'Upload a proof image before completing this task.'); return;
+  }
+  if(t.currentDate && t.currentDate < today && t.revisions === 0){
+    showAlert('al_'+key(id), 'This date has already passed. Update the date first, then mark it complete.'); return;
+  }
+  hideAlert('al_'+key(id));
+  busy(btn, true, 'Submitting…');
+
+  var send = function(proof){
+    google.script.run
+      .withSuccessHandler(function(res){ busy(btn,false); toast(res.message); load(); })
+      .withFailureHandler(function(e){ busy(btn,false); showAlert('al_'+key(id), e.message); })
+      .completeTask(id, proof, remark);
+  };
+  if(file){ readFile(file).then(send).catch(function(e){ busy(btn,false); showAlert('al_'+key(id), e.message); }); }
+  else { send(null); }
+}
+
+/* pagination */
+function renderPager(){
+  var total = state.filtered.length, pages = Math.max(1, Math.ceil(total/state.size));
+  var start = (state.page-1)*state.size;
+  document.getElementById('pageInfo').textContent =
+    'Showing ' + (start+1) + '–' + Math.min(start+state.size, total) + ' of ' + total;
+  document.getElementById('prevBtn').disabled = state.page <= 1;
+  document.getElementById('nextBtn').disabled = state.page >= pages;
+  var nums='', from=Math.max(1,state.page-2), to=Math.min(pages,from+4);
+  for(var p=from;p<=to;p++) nums += '<button class="pbtn '+(p===state.page?'active':'')+'" onclick="gotoPage('+p+')">'+p+'</button>';
+  document.getElementById('pageNums').innerHTML = nums;
+}
+function gotoPage(p){
+  var pages = Math.max(1, Math.ceil(state.filtered.length/state.size));
+  state.page = Math.min(Math.max(1,p), pages); state.openId = null; renderTable();
+}
+function setPageSize(v){ state.size = Number(v); state.page = 1; renderTable(); }
+
+function exportCsv(){
+  if(!state.filtered.length){ toast('Nothing to export.', true); return; }
+  var head = ['Task ID','Task','Assigned By','Assigned To','Planned','Revision','Status','Priority','Proof Required','Voice Note By'];
+  var rows = [head].concat(sortRows(state.filtered, state.sort).map(function(t){
+    return [t.taskId,t.task,t.assignedBy,t.assignedTo,t.currentDate,t.revision1,t.status,t.priority,t.proofReq,t.voiceBy];
+  }));
+  downloadCSV(rows, 'my-tasks-' + todayStr() + '.csv');
+}
+
+wireCombo('fName','fNameList', function(){ return state.doers.map(function(d){ return d.name; }); }, applyFilters);
+wireCombo('fTask','fTaskList', function(){
+  var seen = {};
+  return state.all.map(function(t){ return t.task; }).filter(function(v){ if(!v||seen[v]) return false; seen[v]=1; return true; });
+}, applyFilters);
+
+wireCombo('rDoer','rDoerList', function(){ return state.doers.map(function(d){ return d.name; }); });
+wireSort('myTable', state, renderTable);
+load();
+</script>
+</body>
+</html>

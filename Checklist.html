@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include('Style.html'); ?>
+  <style>
+    .custom-multiselect { position: relative; width: 100%; }
+    .multiselect-btn {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%; padding: 8px 12px; background: #fff;
+      border: 1px solid var(--border, #d1d5db); border-radius: 6px;
+      font-size: 14px; cursor: pointer; text-align: left; color: inherit;
+    }
+    .multiselect-btn:focus { outline: none; border-color: var(--flame, #0063b6); }
+    .multiselect-dropdown {
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: #fff; border: 1px solid var(--border, #d1d5db);
+      border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      z-index: 1050; padding: 8px 0; max-height: 220px; overflow-y: auto;
+    }
+    .multiselect-actions {
+      display: flex; justify-content: space-between;
+      padding: 4px 12px 8px; border-bottom: 1px solid #f0f2f5; font-size: 12px;
+    }
+    .multiselect-item {
+      display: flex !important; align-items: center !important; justify-content: flex-start !important;
+      gap: 10px; padding: 8px 12px; font-size: 13px; cursor: pointer; user-select: none;
+    }
+    .multiselect-item:hover { background: #f4f6fb; }
+    .multiselect-item input[type="checkbox"] {
+      cursor: pointer; flex-shrink: 0; width: 16px; height: 16px; margin: 0;
+      accent-color: var(--flame, #0063b6);
+    }
+  .multiselect-item span { flex: 1; text-align: left; }
+
+    /* ====== ENHANCED CHECKLIST MODAL UI ====== */
+    .modal-rule-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 16px;
+      margin: 4px 0 10px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .rule-title {
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--flame, #0063b6);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 2px;
+    }
+    .pill-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+    .pill-item {
+      cursor: pointer;
+      user-select: none;
+      display: inline-flex;
+      align-items: center;
+    }
+    .pill-item input[type="checkbox"] {
+      display: none;
+    }
+    .pill-label {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 7px 14px;
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #475569;
+      transition: all 0.18s ease;
+      min-width: 44px;
+    }
+    .pill-item input[type="checkbox"]:checked + .pill-label {
+      background: var(--flame, #0063b6);
+      color: #ffffff;
+      border-color: var(--flame, #0063b6);
+      box-shadow: 0 2px 6px rgba(0, 99, 182, 0.25);
+    }
+    .pill-item:hover .pill-label {
+      border-color: var(--flame, #0063b6);
+    }
+    .preview-pill {
+      background: #f0f7ff;
+      border-left: 3px solid var(--flame, #0063b6);
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #1e3a8a;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+<?!= include('Navbar.html'); ?>
+
+<div class="main">
+  <div class="page-head">
+    <div>
+      <div class="page-title">Checklist</div>
+      <div class="page-sub">Recurring work — tick it off as it comes due.</div>
+    </div>
+   <div class="head-actions">
+        <button class="btn btn-ghost" onclick="load()">&#8635; Refresh</button>
+        <button class="btn btn-ghost" onclick="exportCsv()">Export CSV</button>
+      <button class="btn btn-ghost" onclick="openBuddy()">Set buddy (leave coverage)</button>
+      <button class="btn btn-ghost" id="btnHoliday" onclick="openHolidays()" style="display:none;">Manage holidays</button>
+     <button class="btn btn-ghost" id="btnMaster" onclick="openMasterList()" style="display:none;">Master list</button>
+      <button class="btn btn-ghost" id="btnEdit" onclick="openSeries()" style="display:none;">Edit / delete</button>
+      <button class="btn btn-primary" id="btnAdd" onclick="openAdd()" style="display:none;">+ Add task</button>
+    </div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filter-card">
+    <div class="filter-bar">
+      <div class="fl">&#9776; Filters <span class="filter-count" id="filterCount" style="display:none;">0</span></div>
+      <div class="fr">
+        <button class="link-btn" onclick="clearFilters()">Clear all</button>
+        <button class="chev" id="filterToggle" onclick="toggleFilters()">Hide &#9650;</button>
+      </div>
+    </div>
+    <div class="filter-body" id="filterBody">
+      <div class="filters">
+        <div class="field combo">
+          <label for="fName">Doer</label>
+          <input type="text" id="fName" placeholder="All doers" autocomplete="off">
+          <div class="combo-list" id="fNameList"></div>
+        </div>
+        <div class="field combo">
+          <label for="fTask">Task</label>
+          <input type="text" id="fTask" placeholder="Search text" autocomplete="off">
+          <div class="combo-list" id="fTaskList"></div>
+        </div>
+        <div class="field">
+          <label for="fFreq">Frequency</label>
+          <select id="fFreq"><option value="">All</option>
+            <option value="D">Daily</option><option value="W">Weekly</option>
+            <option value="M">Monthly</option><option value="Q">Quarterly</option><option value="Y">Yearly</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fStatus">Status</label>
+          <select id="fStatus"><option value="">All</option>
+            <option>Pending</option><option>Done</option><option>Non-Functional</option>
+          </select>
+        </div>
+        <div class="field"><label for="fFrom">Planned from</label><input type="date" id="fFrom"></div>
+        <div class="field"><label for="fTo">Planned to</label><input type="date" id="fTo"></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;">
+        <button class="btn btn-ghost btn-sm" id="qToday" onclick="quick('today')">Today</button>
+        <button class="btn btn-ghost btn-sm" id="qPastDue" onclick="quick('pastDue')">Past due</button>
+        <button class="btn btn-ghost btn-sm" id="qWeek" onclick="quick('week')">This week</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TILES -->
+  <div class="tiles">
+    <div class="tile"><div class="ti">&#128203;</div><div><div class="tv" id="sTotal">0</div><div class="tl">Total</div></div></div>
+    <div class="tile green"><div class="ti">&#10003;</div><div><div class="tv" id="sDone">0</div><div class="tl">Done</div></div></div>
+    <div class="tile amber"><div class="ti">&#9203;</div><div><div class="tv" id="sPending">0</div><div class="tl">Pending</div></div></div>
+    <div class="tile red"><div class="ti">&#9888;</div><div><div class="tv" id="sOverdue">0</div><div class="tl">Overdue</div></div></div>
+    <div class="tile purple"><div class="ti">&#128683;</div><div><div class="tv" id="sNF">0</div><div class="tl">Non-functional</div></div></div>
+  </div>
+
+  <!-- PER-DOER SUMMARY -->
+  <div class="card card-pad" style="margin-bottom:14px;" id="summaryCard">
+    <div class="card-title" style="margin-bottom:12px;">By doer</div>
+    <div id="summaryGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;"></div>
+  </div>
+  <!-- BULK BAR -->
+  <div class="card card-pad" id="bulkBar" style="display:none;margin-bottom:14px;border-left:3px solid var(--flame);">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div style="font-size:13px;"><strong id="selCount">0</strong> task(s) selected</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="openBulk('md')">Bulk MD remark</button>
+        <button class="btn btn-navy btn-sm" onclick="openBulk('ea')">Bulk EA remark</button>
+        <button class="btn btn-danger btn-sm" onclick="bulkDeleteSelected()">Bulk delete</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearSelection()">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">Checklist tasks</div>
+      <div id="countInfo" style="font-size:12px;color:var(--muted);"></div>
+    </div>
+    <div class="loading show" id="loading"><div class="spinner"></div>Loading checklist…</div>
+    <div class="table-wrap" id="tableWrap" style="display:none;">
+      <table class="data" id="clTable">
+        <thead><tr>
+          <th style="width:38px;"><input type="checkbox" id="selAll" onclick="toggleAll(this)"></th>
+          <th data-key="taskId">ID</th>
+          <th data-key="doer">Doer</th>
+          <th data-key="task">Task</th>
+          <th data-key="frequency">Freq</th>
+          <th data-key="plannedDate">Planned</th>
+          <th data-key="status">Status</th>
+          <th>Actual / action</th>
+          <th data-key="proofReq">Proof req.</th>
+          <th>Document</th>
+          <th>Task log</th>
+          <th data-key="assignedBy">Assigned by</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="emptyState" style="display:none;">
+      <span class="ei">&#9989;</span>No matching records found. Nothing is due for these filters.
+    </div>
+    <div class="pager" id="pager" style="display:none;">
+      <div id="pageInfo"></div>
+      <div class="pctrl">
+        <select id="pageSize" onchange="setPageSize(this.value)"><option>10</option><option selected>25</option><option>50</option><option>100</option></select>
+        <button class="pbtn" id="prevBtn" onclick="gotoPage(state.page-1)">&lsaquo;</button>
+        <span id="pageNums" style="display:flex;gap:5px;"></span>
+        <button class="pbtn" id="nextBtn" onclick="gotoPage(state.page+1)">&rsaquo;</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- ============ ADD SERIES ============ -->
+<div class="overlay" id="mAdd">
+  <div class="modal" style="max-width: 580px;">
+    <div class="modal-head">
+      <h3>Add checklist task</h3>
+      <button class="modal-close" onclick="closeModal('mAdd')">&times;</button>
+    </div>
+    <div class="modal-body" style="gap: 16px;">
+      <div class="alert" id="addAlert"></div>
+
+      <!-- DOER SELECTION -->
+    <!-- DOER & VERIFIER SELECTION -->
+      <div class="grid-2">
+        <div class="field combo">
+          <label class="required" for="aDoer">Assigned to (Doer)</label>
+          <input type="text" id="aDoer" placeholder="Search a doer..." autocomplete="off">
+          <div class="combo-list" id="aDoerList"></div>
+        </div>
+        <div class="field combo">
+          <label for="aVerifier">Verifier (optional)</label>
+          <input type="text" id="aVerifier" placeholder="Defaults to you" autocomplete="off">
+          <div class="combo-list" id="aVerifierList"></div>
+        </div>
+      </div>
+
+      <!-- TASK DESCRIPTION -->
+      <div class="field">
+        <label class="required" for="aTask">Task description</label>
+        <textarea id="aTask" rows="3" placeholder="What needs doing each time?"></textarea>
+      </div>
+
+      <!-- FREQUENCY & EVIDENCE -->
+      <div class="grid-2">
+        <div class="field">
+          <label class="required" for="aFreq">Frequency</label>
+          <select id="aFreq" onchange="onFreqChange()">
+            <option value="D">Daily</option>
+            <option value="W">Weekly</option>
+            <option value="M">Monthly (by Date)</option>
+            <option value="MW">Monthly (by Day of Week)</option>
+            <option value="Q">Quarterly (Every 3 months)</option>
+            <option value="Y">Yearly</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="aProof">Proof required</label>
+          <select id="aProof">
+            <option value="No">No</option>
+            <option value="Yes">Yes</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- REQUIRES VERIFICATION -->
+      <div class="grid-2">
+        <div class="field">
+          <label for="aRequireVerification">Requires verification</label>
+          <select id="aRequireVerification">
+            <option value="Yes">Yes — needs approval before it's closed</option>
+            <option value="No">No — done means done</option>
+          </select>
+        </div>
+        <div></div>
+      </div>
+
+      <!-- SCHEDULE CONFIGURATION CARD (Dynamic Rules) -->
+      <div class="modal-rule-box" id="ruleContainer">
+        <div class="rule-title">
+          <span>⚙ Schedule Details</span>
+        </div>
+
+        <!-- 1. WEEKLY MULTI-DAYS -->
+        <div class="field" id="aWeekDaysWrap" style="display:none;">
+          <label class="required" style="font-size:12px; color:#334155;">Repeat on days of the week</label>
+          <div class="custom-multiselect" id="weekDaysContainer" style="margin-top:4px;">
+            <button type="button" class="multiselect-btn" id="weekDaysBtn" onclick="toggleDaysDropdown(event)">
+              <span id="weekDaysBtnText">Select Days</span>
+              <span class="chev">&#9660;</span>
+            </button>
+            <div class="multiselect-dropdown" id="weekDaysMenu" style="display:none;">
+              <div class="multiselect-actions">
+                <span class="link-btn" onclick="selectAllDays(true)">Select all</span>
+                <span class="link-btn" onclick="selectAllDays(false)">Clear</span>
+              </div>
+              <label class="multiselect-item"><input type="checkbox" class="day-chk" value="Monday" onchange="onDaySelectionChange()"><span>Monday</span></label>
+              <label class="multiselect-item"><input type="checkbox" class="day-chk" value="Tuesday" onchange="onDaySelectionChange()"><span>Tuesday</span></label>
+              <label class="multiselect-item"><input type="checkbox" class="day-chk" value="Wednesday" onchange="onDaySelectionChange()"><span>Wednesday</span></label>
+              <label class="multiselect-item"><input type="checkbox" class="day-chk" value="Thursday" onchange="onDaySelectionChange()"><span>Thursday</span></label>
+              <label class="multiselect-item"><input type="checkbox" class="day-chk" value="Friday" onchange="onDaySelectionChange()"><span>Friday</span></label>
+              <label class="multiselect-item"><input type="checkbox" class="day-chk" value="Saturday" onchange="onDaySelectionChange()"><span>Saturday</span></label>
+              <label class="multiselect-item"><input type="checkbox" class="day-chk" value="Sunday" onchange="onDaySelectionChange()"><span>Sunday</span></label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. MONTHLY BY DATE -->
+        <div class="field" id="aMonthDatesWrap" style="display:none;">
+          <label for="aMonthDates" style="font-size:12px; color:#334155;">Date(s) of the Month</label>
+          <input type="text" id="aMonthDates" placeholder="e.g. 10 or 10, 13, 25" style="margin-top:4px;">
+          <span class="hint">Enter comma-separated dates (e.g. <code>10, 13</code>).</span>
+        </div>
+
+        <!-- 3. MONTHLY BY WEEKDAY (MULTI-WEEK & MULTI-DAY PILLS) -->
+        <div class="field" id="aMonthWeekdayWrap" style="display:none; gap:12px;">
+          <div>
+            <label class="required" style="font-size:12px; color:#334155; font-weight:600;">1. Select Week(s)</label>
+            <div class="pill-group">
+              <label class="pill-item"><input type="checkbox" class="ord-chk" value="1" onchange="previewCount()"><span class="pill-label">1st</span></label>
+              <label class="pill-item"><input type="checkbox" class="ord-chk" value="2" onchange="previewCount()"><span class="pill-label">2nd</span></label>
+              <label class="pill-item"><input type="checkbox" class="ord-chk" value="3" onchange="previewCount()"><span class="pill-label">3rd</span></label>
+              <label class="pill-item"><input type="checkbox" class="ord-chk" value="4" onchange="previewCount()"><span class="pill-label">4th</span></label>
+              <label class="pill-item"><input type="checkbox" class="ord-chk" value="5" onchange="previewCount()"><span class="pill-label">Last</span></label>
+            </div>
+          </div>
+
+          <div>
+            <label class="required" style="font-size:12px; color:#334155; font-weight:600;">2. Select Day(s)</label>
+            <div class="pill-group">
+              <label class="pill-item"><input type="checkbox" class="mday-chk" value="Monday" onchange="previewCount()"><span class="pill-label">Mon</span></label>
+              <label class="pill-item"><input type="checkbox" class="mday-chk" value="Tuesday" onchange="previewCount()"><span class="pill-label">Tue</span></label>
+              <label class="pill-item"><input type="checkbox" class="mday-chk" value="Wednesday" onchange="previewCount()"><span class="pill-label">Wed</span></label>
+              <label class="pill-item"><input type="checkbox" class="mday-chk" value="Thursday" onchange="previewCount()"><span class="pill-label">Thu</span></label>
+              <label class="pill-item"><input type="checkbox" class="mday-chk" value="Friday" onchange="previewCount()"><span class="pill-label">Fri</span></label>
+              <label class="pill-item"><input type="checkbox" class="mday-chk" value="Saturday" onchange="previewCount()"><span class="pill-label">Sat</span></label>
+              <label class="pill-item"><input type="checkbox" class="mday-chk" value="Sunday" onchange="previewCount()"><span class="pill-label">Sun</span></label>
+            </div>
+          </div>
+          <span class="hint" style="font-size:11.5px; color:#64748b;">Aap multiple weeks (e.g. 1st, 3rd) aur multiple days (e.g. Mon, Thu) ek sath select kar sakte hain.</span>
+        </div>
+
+        <!-- EXPLANATION NOTE -->
+        <div class="hint" id="aFreqHint" style="color: #64748b; font-size: 11.5px;"></div>
+      </div>
+
+      <!-- DATE RANGES -->
+      <div class="grid-2">
+        <div class="field">
+          <label class="required" for="aStart">Start date</label>
+          <input type="date" id="aStart">
+        </div>
+        <div class="field">
+          <label for="aEnd">Repeat until</label>
+          <input type="date" id="aEnd">
+          <span class="hint">Leave blank to run for 1 year from the start date.</span>
+        </div>
+      </div>
+
+      <!-- SUMMARY PREVIEW -->
+      <div class="preview-pill" id="addPreview">Pick dates to preview schedule.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mAdd')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAdd(this)">Create tasks</button>
+    </div>
+  </div>
+</div>
+<!-- ============ BUDDY ============ -->
+<div class="overlay" id="mBuddy">
+  <div class="modal">
+    <div class="modal-head"><h3>Set a buddy (temporary leave coverage)</h3><button class="modal-close" onclick="closeModal('mBuddy')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="buddyAlert"></div>
+      <div class="field combo">
+        <label class="required" for="bOriginal">Doer going on leave</label>
+        <input type="text" id="bOriginal" placeholder="Search a doer" autocomplete="off">
+        <div class="combo-list" id="bOriginalList"></div>
+      </div>
+      <div class="field combo">
+        <label class="required" for="bBuddy">Buddy (will cover their tasks)</label>
+        <input type="text" id="bBuddy" placeholder="Search a doer" autocomplete="off">
+        <div class="combo-list" id="bBuddyList"></div>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label class="required" for="bFrom">From date</label><input type="date" id="bFrom"></div>
+        <div class="field"><label class="required" for="bTo">To date</label><input type="date" id="bTo"></div>
+      </div>
+      <span class="hint">During this window, the buddy will see and can update/complete both Delegation and Checklist tasks that belong to the doer above — nothing is permanently reassigned.</span>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mBuddy')">Close</button>
+      <button class="btn btn-primary" onclick="submitBuddy(this)">Set buddy</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ HOLIDAYS ============ -->
+<div class="overlay" id="mHoliday">
+  <div class="modal">
+    <div class="modal-head"><h3>Manage holidays</h3><button class="modal-close" onclick="closeModal('mHoliday')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="holidayAlert"></div>
+      <div class="grid-2">
+        <div class="field"><label class="required" for="hDate">Date</label><input type="date" id="hDate"></div>
+        <div class="field"><label for="hDesc">Description</label><input type="text" id="hDesc" placeholder="e.g. Diwali, Republic Day"></div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="submitHoliday(this)">Add holiday</button>
+      <div class="hint" style="margin-top:6px;">Daily checklist tasks skip these dates automatically. Existing Delegation and Checklist tasks planned on a holiday date show a "Holiday" status instead of Pending.</div>
+      <div class="table-wrap" style="margin-top:14px;">
+        <table class="data">
+          <thead><tr><th>Date</th><th>Description</th><th style="width:70px;">Actions</th></tr></thead>
+          <tbody id="holidayBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mHoliday')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ COMPLETE ============ -->
+<div class="overlay" id="mDone">
+  <div class="modal slim">
+    <div class="modal-head"><h3>Complete task</h3><button class="modal-close" onclick="closeModal('mDone')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="doneAlert"></div>
+      <div class="field"><label>Task</label><div class="readout" id="dTaskInfo"></div></div>
+      <div class="field" id="dProofWrap" style="display:none;">
+        <label class="required">Proof document</label>
+        <div class="drop" id="dDrop">Click to upload supporting proof</div>
+        <input type="file" id="dFile" style="display:none;" onchange="pickProof(this)">
+      </div>
+      <div class="field" id="dNfWrap">
+        <label for="dNfReason">Reason (only if marking non-functional)</label>
+        <textarea id="dNfReason" placeholder="Why could this not be done?"></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mDone')">Cancel</button>
+      <button class="btn btn-warn" onclick="submitNonFunctional(this)">Non-functional</button>
+      <button class="btn btn-success" onclick="submitDone(this)">Mark done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ REMARK ============ -->
+<div class="overlay" id="mRemark">
+  <div class="modal">
+    <div class="modal-head"><h3 id="remarkTitle">Add remark</h3><button class="modal-close" onclick="closeModal('mRemark')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="remarkAlert"></div>
+      <div class="field"><label id="remarkScope">Task</label><div class="readout" id="rmInfo"></div></div>
+      <div class="field"><label class="required" for="rmText">Remark</label><textarea id="rmText" placeholder="Type your remark"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mRemark')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitRemark(this)">Save remark</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TASK LOG ============ -->
+<div class="overlay" id="mLog">
+  <div class="modal">
+    <div class="modal-head"><h3 id="logTitle">Task log</h3><button class="modal-close" onclick="closeModal('mLog')">&times;</button></div>
+    <div class="modal-body"><div class="timeline" id="logBody"></div></div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('mLog')">Close</button></div>
+  </div>
+</div>
+
+<!-- ============ MASTER LIST ============ -->
+<div class="overlay" id="mMaster">
+  <div class="modal wide">
+    <div class="modal-head"><h3>Recurring task master list</h3><button class="modal-close" onclick="closeModal('mMaster')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="masterAlert"></div>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr>
+            <th>Series ID</th><th>Doer</th><th>Task</th><th>Frequency</th>
+            <th>Start</th><th>End</th><th>Proof req.</th><th>Assigned by</th>
+            <th>Generated through</th><th>Created</th>
+          </tr></thead>
+          <tbody id="masterBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('mMaster')">Close</button></div>
+  </div>
+</div>
+
+<!-- ============ NO PERMISSION POPUP ============ -->
+<div class="overlay" id="mNoAccess">
+  <div class="modal slim">
+    <div class="modal-head"><h3>Access denied</h3>
+      <button class="modal-close" onclick="closeModal('mNoAccess')">&times;</button></div>
+    <div class="modal-body" style="text-align:center;">
+      <div style="font-size:42px;line-height:1;">&#128274;</div>
+      <p style="font-size:14px;color:var(--body);margin:10px 0 0;">
+        <strong>You cannot edit or delete.</strong><br>
+        Only users with <strong>Role = Admin</strong> can make changes.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" onclick="closeModal('mNoAccess')">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EDIT / DELETE SERIES ============ -->
+<div class="overlay" id="mSeries">
+  <div class="modal">
+    <div class="modal-head"><h3>Edit or delete a recurring task</h3><button class="modal-close" onclick="closeModal('mSeries')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="seriesAlert"></div>
+      <div class="field">
+        <label class="required">Recurring task(s)</label>
+        <span class="hint" style="display:block;margin-bottom:6px;">Tick one or more to delete together — different doers can be mixed. Editing (new doer/description) only applies when exactly one is ticked.</span>
+        <div id="sSeriesList" style="max-height:240px;overflow-y:auto;overflow-x:hidden;border:1px solid var(--border,#d1d5db);border-radius:8px;padding:0;">
+          <div class="dash" style="padding:12px;">Loading…</div>
+        </div>
+      </div>
+               <div id="seriesFields" style="display:none;gap:13px;">
+        <div class="field combo">
+          <label for="sDoer">New doer</label>
+          <input type="text" id="sDoer" placeholder="Leave unchanged" autocomplete="off">
+          <div class="combo-list" id="sDoerList"></div>
+        </div>
+        <div class="field">
+          <label for="sTask">New task description</label>
+          <textarea id="sTask" placeholder="Leave unchanged"></textarea>
+        </div>
+        <div class="field">
+          <label for="sRequireVerification">Requires verification</label>
+          <select id="sRequireVerification">
+            <option value="Yes">Yes — needs approval before it's closed</option>
+            <option value="No">No — done means done</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="sScope">Apply to</label>
+        <select id="sScope">
+          <option value="future">Today and future occurrences only</option>
+          <option value="all">Every occurrence, including past</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mSeries')">Cancel</button>
+      <button class="btn btn-danger" onclick="submitSeriesDelete(this)">Delete selected</button>
+      <button class="btn btn-primary" onclick="submitSeriesUpdate(this)">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =============================== STATE =============================== */
+var ME = <?!= JSON.stringify(user) ?>;
+var CAN_MANAGE = ME.accessLevel === 'ADMIN' || ME.accessLevel === 'TL';
+var state = { all:[], filtered:[], doers:[], series:[], page:1, size:25,
+              sort:{key:'taskId', dir:'asc'}, quick:'today', selected:{} };
+var doneId = null, proofFile = null, remarkId = null, remarkType = 'md', remarkBulk = false;
+
+var FREQ_LABEL = { D:'Daily', W:'Weekly', M:'Monthly', Q:'Quarterly', Y:'Yearly' };
+
+/* =============================== LOAD =============================== */
+function load(){
+  document.getElementById('loading').classList.add('show');
+  google.script.run
+    .withSuccessHandler(function(data){
+      state.doers = data.doers.filter(function(d){ return (d.status||'Active').toLowerCase() !== 'inactive'; });
+      state.all = data.tasks;
+      applyFilters();
+      document.getElementById('loading').classList.remove('show');
+    })
+    .withFailureHandler(function(e){
+      document.getElementById('loading').classList.remove('show');
+      toast(e.message, true);
+    })
+    .getChecklistBootstrap();
+}
+
+/* =============================== FILTERS =============================== */
+var FILTER_IDS = ['fName','fTask','fFreq','fStatus','fFrom','fTo'];
+FILTER_IDS.forEach(function(id){
+  document.getElementById(id).addEventListener('change', function(){ state.quick=''; markQuick(); applyFilters(); });
+});
+function toggleFilters(){
+  var b = document.getElementById('filterBody'), t = document.getElementById('filterToggle');
+  var hidden = b.style.display === 'none';
+  b.style.display = hidden ? 'block' : 'none';
+  t.innerHTML = hidden ? 'Hide &#9650;' : 'Show &#9660;';
+}
+function clearFilters(){
+  FILTER_IDS.forEach(function(id){ document.getElementById(id).value=''; });
+  state.quick=''; markQuick(); applyFilters();
+}
+function quick(kind){
+  state.quick = (state.quick === kind) ? '' : kind;
+  document.getElementById('fFrom').value = '';
+  document.getElementById('fTo').value = '';
+  markQuick(); applyFilters();
+}
+function markQuick(){
+  [['today','qToday'],['pastDue','qPastDue'],['week','qWeek']].forEach(function(p){
+    document.getElementById(p[1]).className = 'btn btn-sm ' + (state.quick===p[0] ? 'btn-primary' : 'btn-ghost');
+  });
+}
+function weekBounds(){
+  var d = new Date(); d.setHours(0,0,0,0);
+  var day = d.getDay();
+  var mon = new Date(d); mon.setDate(d.getDate() + (day===0 ? -6 : 1-day));
+  var sun = new Date(mon); sun.setDate(mon.getDate()+6);
+  var f = function(x){ return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); };
+  return [f(mon), f(sun)];
+}
+
+function applyFilters(){
+  var name = document.getElementById('fName').value.trim().toLowerCase();
+  var task = document.getElementById('fTask').value.trim().toLowerCase();
+  var freq = document.getElementById('fFreq').value;
+  var st   = document.getElementById('fStatus').value;
+  var from = document.getElementById('fFrom').value;
+  var to   = document.getElementById('fTo').value;
+  var today = todayStr();
+  var wk = weekBounds();
+
+  state.filtered = state.all.filter(function(t){
+    // Done tasks stay off the list unless the user explicitly filters for them.
+    if(!st && t.status === 'Done') return false;
+    if(name && t.doer.toLowerCase().indexOf(name) === -1) return false;
+    if(task && t.task.toLowerCase().indexOf(task) === -1) return false;
+    if(freq && t.frequency !== freq) return false;
+    if(st && t.status !== st) return false;
+    if(from && (!t.plannedDate || t.plannedDate < from)) return false;
+    if(to   && (!t.plannedDate || t.plannedDate > to))   return false;
+
+    if(state.quick === 'today'   && t.plannedDate !== today) return false;
+    if(state.quick === 'pastDue' && !(t.plannedDate && t.plannedDate < today && t.status === 'Pending')) return false;
+    if(state.quick === 'week'    && !(t.plannedDate >= wk[0] && t.plannedDate <= wk[1])) return false;
+    return true;
+  });
+
+  var n = FILTER_IDS.filter(function(id){ return document.getElementById(id).value.trim() !== ''; }).length
+        + (state.quick ? 1 : 0);
+  var badge = document.getElementById('filterCount');
+  badge.style.display = n ? 'inline-block' : 'none';
+  badge.textContent = n;
+
+  state.page = 1;
+  renderStats(); renderSummary(); renderTable();
+}
+
+function renderStats(){
+  var f = state.filtered, today = todayStr();
+  var by = function(s){ return f.filter(function(t){ return t.status === s; }).length; };
+  document.getElementById('sTotal').textContent   = f.length;
+  document.getElementById('sDone').textContent    = by('Done');
+  document.getElementById('sPending').textContent = by('Pending');
+  document.getElementById('sNF').textContent      = by('Non-Functional');
+  document.getElementById('sOverdue').textContent =
+    f.filter(function(t){ return t.status === 'Pending' && t.plannedDate && t.plannedDate < today; }).length;
+  document.getElementById('countInfo').textContent = f.length + ' of ' + state.all.length + ' tasks';
+}
+
+function renderSummary(){
+  var map = {}, today = todayStr();
+  state.filtered.forEach(function(t){
+    var r = map[t.doer] || (map[t.doer] = { name:t.doer, total:0, done:0, pending:0, late:0 });
+    r.total++;
+    if(t.status === 'Done'){
+      r.done++;
+      if(t.actualDate && t.plannedDate && t.actualDate.slice(0,10) > t.plannedDate) r.late++;
+    } else if(t.status === 'Pending'){
+      r.pending++;
+    }
+  });
+  var rows = Object.keys(map).map(function(k){ return map[k]; })
+                   .sort(function(a,b){ return b.total - a.total; });
+  document.getElementById('summaryCard').style.display = rows.length ? 'block' : 'none';
+  document.getElementById('summaryGrid').innerHTML = rows.map(function(r){
+    var pct = r.total ? Math.round(r.done/r.total*100) : 0;
+    return '<div class="runner" style="border-left-color:var(--flame);">' +
+      '<div class="rnum">'+initials(r.name)+'</div>' +
+      '<div class="rinfo">' +
+        '<div class="rn">'+esc(r.name)+'</div>' +
+        '<div class="rs">'+r.done+' done · '+r.pending+' pending'+(r.late?' · '+r.late+' late':'')+'</div>' +
+        '<div class="rbar"><i style="width:'+pct+'%"></i></div>' +
+      '</div><div class="rpct">'+pct+'%</div></div>';
+  }).join('');
+}
+
+/* =============================== TABLE =============================== */
+function taskLog(t){
+  var out = [];
+  parseRemarks(t.mdRemark).forEach(function(i){ i.tag = 'MD'; out.push(i); });
+  parseRemarks(t.eaRemark).forEach(function(i){ i.tag = 'EA'; out.push(i); });
+  return out.sort(function(a,b){ return (b.when||'').localeCompare(a.when||''); });
+}
+function taskById(id){ return state.all.filter(function(t){ return t.taskId === id; })[0]; }
+
+function renderTable(){
+  var tb = document.getElementById('tbody');
+  if(!state.filtered.length){
+    document.getElementById('tableWrap').style.display='none';
+    document.getElementById('pager').style.display='none';
+    document.getElementById('emptyState').style.display='block';
+    return;
+  }
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('tableWrap').style.display='block';
+  document.getElementById('pager').style.display='flex';
+
+  var sorted = sortRows(state.filtered, state.sort);
+  var start = (state.page-1)*state.size;
+  var rows = sorted.slice(start, start+state.size);
+  var today = todayStr();
+
+  tb.innerHTML = rows.map(function(t){
+    var overdue = t.status === 'Pending' && t.plannedDate && t.plannedDate < today;
+    var mine = t.doer.toLowerCase() === ME.name.trim().toLowerCase();
+    var logCount = taskLog(t).length;
+
+    var actionCell;
+    if(t.isHoliday && t.status !== 'Done' && t.status !== 'Non-Functional'){
+      actionCell = '<span class="badge b-count">&#127881; Holiday</span>';
+    } else if(t.status === 'Pending'){
+      actionCell = (mine || CAN_MANAGE)
+        ? '<button class="btn btn-primary btn-sm" onclick="openDone(\'' + t.taskId + '\')">Mark done</button>'
+        : '<span class="dash">—</span>';
+    } else {
+      actionCell = esc(t.actualDate || '—');
+    }
+
+   var remarkCell = (CAN_MANAGE || mine || t.actingAsBuddy)
+      ? '<button class="icon-btn" data-tip="Add MD remark" onclick="openRemark(\''+t.taskId+'\',\'md\')">&#128172;</button>' +
+        '<button class="icon-btn" data-tip="Add EA remark" onclick="openRemark(\''+t.taskId+'\',\'ea\')">&#9998;</button>'
+      : '';
+
+    return '<tr>' +
+      '<td><input type="checkbox" class="rowchk" data-id="'+t.taskId+'" ' +
+          (state.selected[t.taskId]?'checked':'') + ' onchange="toggleOne(this)"></td>' +
+      '<td><span class="badge b-id">'+esc(t.taskId)+'</span></td>' +
+            '<td><span class="chip"><span class="ca">'+initials(t.doer)+'</span>'+esc(t.doer)+'</span>' +
+        (t.buddy ? '<span class="sub">&#128101; covered by '+esc(t.buddy)+'</span>' : '')+'</td>' +
+      '<td class="cell-task">'+nl2br(t.task)+'</td>' +
+      '<td><span class="badge b-count">'+esc(FREQ_LABEL[t.frequency] || t.frequency)+'</span></td>' +
+      '<td class="nowrap">'+prettyDate(t.plannedDate)+(overdue?'<span class="sub" style="color:var(--red)">Overdue</span>':'')+'</td>' +
+      '<td><span class="badge '+clStatusClass(t.status)+'">'+esc(t.status)+'</span></td>' +
+      '<td class="nowrap">'+actionCell+'</td>' +
+      '<td><span class="badge '+(t.proofReq==='Yes'?'b-yes':'b-no')+'">'+t.proofReq+'</span></td>' +
+      '<td>'+(t.proofUrl
+          ? '<a href="'+esc(t.proofUrl)+'" target="_blank" class="icon-btn" data-tip="View document">&#128206;</a>'
+          : '<span class="dash">—</span>')+'</td>' +
+      '<td class="nowrap">'+(logCount
+          ? '<button class="link-btn" onclick="openLog(\''+t.taskId+'\')">View <span class="badge b-count">'+logCount+'</span></button>'
+          : '<span class="dash">—</span>') + ' ' + remarkCell + '</td>' +
+      '<td class="nowrap">'+esc(t.assignedBy || '—')+'</td>' +
+    '</tr>';
+  }).join('');
+
+  var all = tb.querySelectorAll('.rowchk');
+  document.getElementById('selAll').checked = all.length > 0 &&
+    Array.prototype.every.call(all, function(c){ return c.checked; });
+
+  renderPager();
+}
+
+function clStatusClass(s){
+  if(s === 'Done') return 'b-completed';
+  if(s === 'Non-Functional') return 'b-shifted';
+  if(s === 'Holiday') return 'b-count';
+  if(s === 'Approval Waiting') return 'badge-waiting'; // <-- Nayi Line
+  return 'b-pending';
+}
+
+function renderPager(){
+  var total = state.filtered.length, pages = Math.max(1, Math.ceil(total/state.size));
+  var start = (state.page-1)*state.size;
+  document.getElementById('pageInfo').textContent =
+    'Showing ' + (start+1) + '–' + Math.min(start+state.size, total) + ' of ' + total;
+  document.getElementById('prevBtn').disabled = state.page <= 1;
+  document.getElementById('nextBtn').disabled = state.page >= pages;
+  var nums='', f=Math.max(1,state.page-2), to=Math.min(pages,f+4);
+  for(var p=f;p<=to;p++) nums += '<button class="pbtn '+(p===state.page?'active':'')+'" onclick="gotoPage('+p+')">'+p+'</button>';
+  document.getElementById('pageNums').innerHTML = nums;
+}
+function gotoPage(p){
+  var pages = Math.max(1, Math.ceil(state.filtered.length/state.size));
+  state.page = Math.min(Math.max(1,p), pages); renderTable();
+}
+function setPageSize(v){ state.size = Number(v); state.page = 1; renderTable(); }
+
+/* =============================== SELECTION =============================== */
+function toggleOne(cb){
+  if(cb.checked) state.selected[cb.dataset.id] = true;
+  else delete state.selected[cb.dataset.id];
+  updateBulkBar();
+}
+function toggleAll(cb){
+  document.querySelectorAll('#tbody .rowchk').forEach(function(c){
+    c.checked = cb.checked;
+    if(cb.checked) state.selected[c.dataset.id] = true; else delete state.selected[c.dataset.id];
+  });
+  updateBulkBar();
+}
+function clearSelection(){
+  state.selected = {};
+  document.querySelectorAll('#tbody .rowchk').forEach(function(c){ c.checked = false; });
+  document.getElementById('selAll').checked = false;
+  updateBulkBar();
+}
+function updateBulkBar(){
+  var n = Object.keys(state.selected).length;
+  document.getElementById('selCount').textContent = n;
+  document.getElementById('bulkBar').style.display = (n && CAN_MANAGE) ? 'block' : 'none';
+}
+
+/* =============================== ADD SERIES =============================== */
+function onFreqChange(){
+  var freq = document.getElementById('aFreq').value;
+  var wWrap = document.getElementById('aWeekDaysWrap');
+  var mDatesWrap = document.getElementById('aMonthDatesWrap');
+  var mWeekdayWrap = document.getElementById('aMonthWeekdayWrap');
+  var hint = document.getElementById('aFreqHint');
+  var menu = document.getElementById('weekDaysMenu');
+  var ruleBox = document.getElementById('ruleContainer');
+
+  wWrap.style.display = (freq === 'W') ? 'block' : 'none';
+  mDatesWrap.style.display = (freq === 'M') ? 'block' : 'none';
+  mWeekdayWrap.style.display = (freq === 'MW') ? 'block' : 'none';
+  if(menu) menu.style.display = (freq === 'W') ? 'block' : 'none';
+
+  // Show the rule box only if there is a specific rule or hint
+  ruleBox.style.display = (freq === 'D') ? 'none' : 'flex';
+
+  if(freq === 'D'){
+    hint.textContent = 'Daily skips weekly offs and holidays automatically.';
+  } else if(freq === 'W'){
+    hint.textContent = 'Occurrences on a weekly off or holiday will automatically roll forward to the next working day.';
+    var checked = document.querySelectorAll('#weekDaysMenu .day-chk:checked');
+    if(checked.length === 0){
+      var startDate = document.getElementById('aStart').value;
+      if(startDate){
+        var parts = startDate.split('-');
+        var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        var days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        var dayName = days[d.getDay()];
+        var chk = document.querySelector('#weekDaysMenu .day-chk[value="' + dayName + '"]');
+        if(chk) chk.checked = true;
+      }
+    }
+  } else if(freq === 'M'){
+    hint.textContent = 'Repeats on specified day(s). If falling on an off day or holiday, it moves to the next working day.';
+  } else if(freq === 'MW'){
+    hint.textContent = 'Select one or more weeks (e.g. 1st or 2nd & 4th). If falling on an off day or holiday, it moves to the next working day.';
+  } else if(freq === 'Q'){
+    hint.textContent = 'Repeats every 3 months from start date. Avoids weekly offs and holidays.';
+  } else if(freq === 'Y'){
+    hint.textContent = 'Repeats yearly on start date. Avoids weekly offs and holidays.';
+  }
+
+  updateDaysButtonText();
+  previewCount();
+}
+
+function toggleDaysDropdown(e){
+  if(e) e.stopPropagation();
+  var menu = document.getElementById('weekDaysMenu');
+  menu.style.display = (menu.style.display === 'none' || !menu.style.display) ? 'block' : 'none';
+}
+
+function onDaySelectionChange(){
+  updateDaysButtonText();
+  previewCount();
+}
+
+function selectAllDays(select){
+  document.querySelectorAll('#weekDaysMenu .day-chk').forEach(function(c){
+    c.checked = select;
+  });
+  updateDaysButtonText();
+  previewCount();
+}
+
+function updateDaysButtonText(){
+  var checked = [];
+  document.querySelectorAll('#weekDaysMenu .day-chk:checked').forEach(function(c){
+    checked.push(c.value);
+  });
+  var btnText = document.getElementById('weekDaysBtnText');
+  if(checked.length === 0){
+    btnText.textContent = 'Select Days';
+  } else if(checked.length === 7){
+    btnText.textContent = 'All days (Mon - Sun)';
+  } else {
+    btnText.textContent = checked.map(function(d){ return d.slice(0, 3); }).join(', ');
+  }
+}
+
+// Close dropdown on outside click
+document.addEventListener('click', function(e){
+  var container = document.getElementById('weekDaysContainer');
+  var menu = document.getElementById('weekDaysMenu');
+  if(container && menu && !container.contains(e.target)){
+    menu.style.display = 'none';
+  }
+});
+
+function openAdd(){
+  hideAlert('addAlert');
+  ['aDoer','aTask','aEnd','aVerifier'].forEach(function(id){ document.getElementById(id).value=''; }); // <-- Updated
+  document.getElementById('aFreq').value = 'D';
+  document.getElementById('aProof').value = 'No';
+  document.getElementById('aRequireVerification').value = 'Yes';
+  document.getElementById('aStart').value = todayStr();
+  selectAllDays(false);
+  onFreqChange();
+  openModal('mAdd');
+}
+
+['aFreq','aStart','aEnd'].forEach(function(id){
+  document.getElementById(id).addEventListener('change', previewCount);
+});
+
+function previewCount(){
+  var freq = document.getElementById('aFreq').value;
+  var start = document.getElementById('aStart').value;
+  var end = document.getElementById('aEnd').value;
+  if(!start){ document.getElementById('addPreview').textContent = 'Pick a start date to preview.'; return; }
+  
+  var sp = start.split('-');
+  var s = new Date(Number(sp[0]), Number(sp[1]) - 1, Number(sp[2]));
+  var e = end ? new Date(Number(end.split('-')[0]), Number(end.split('-')[1]) - 1, Number(end.split('-')[2])) : new Date(s.getFullYear(), 11, 31);
+  if(e < s){ document.getElementById('addPreview').textContent = 'Repeat until date must be after start date.'; return; }
+
+  var days = Math.max(0, Math.round((e - s)/86400000)) + 1;
+  var n = 0;
+  var suffix = '';
+
+  if(freq === 'D'){
+    n = Math.round(days * 6 / 7);
+    suffix = ' Sundays and holidays are skipped.';
+  } else if(freq === 'W'){
+    var checked = [];
+    document.querySelectorAll('#weekDaysMenu .day-chk:checked').forEach(function(c){
+      checked.push(c.value);
+    });
+    var count = checked.length || 1;
+    n = Math.round((days / 7) * count);
+    suffix = checked.length ? ' on ' + checked.map(function(d){ return d.slice(0, 3); }).join(', ') + '.' : '';
+  } else if(freq === 'M'){
+    n = Math.ceil(days / 30);
+  } else if(freq === 'Q'){
+    n = Math.ceil(days / 91);
+  } else if(freq === 'Y'){
+    n = Math.ceil(days / 365);
+  }
+
+  var untilStr = end || Utilities_formatDateLocal(new Date(s.getFullYear() + 1, s.getMonth(), s.getDate() - 1));
+  document.getElementById('addPreview').textContent =
+    'About ' + Math.max(1, Math.min(n, 400)) + ' occurrences will be created' + suffix + ', up to ' +
+    prettyDate(untilStr) + '.';
+}
+
+/** Formats a JS Date as 'yyyy-MM-dd', local time, no timezone shifting. */
+function Utilities_formatDateLocal(d){
+  var y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  return y + '-' + m + '-' + day;
+}
+
+function submitAdd(btn){
+  hideAlert('addAlert');
+  var freq = document.getElementById('aFreq').value;
+  var weekDays = [];
+  var monthOrdinals = [];
+
+  if(freq === 'W'){
+    document.querySelectorAll('#weekDaysMenu .day-chk:checked').forEach(function(c){
+      weekDays.push(c.value);
+    });
+    if(!weekDays.length){
+      showAlert('addAlert', 'Please select at least one day of the week.');
+      return;
+    }
+ } else if(freq === 'MW'){
+    document.querySelectorAll('.ord-chk:checked').forEach(function(c){
+      monthOrdinals.push(Number(c.value));
+    });
+    var monthDaysOfWeek = [];
+    document.querySelectorAll('.mday-chk:checked').forEach(function(c){
+      monthDaysOfWeek.push(c.value);
+    });
+
+    if(!monthOrdinals.length){
+      showAlert('addAlert', 'Please select at least one week (e.g. 1st, 2nd, 4th).');
+      return;
+    }
+    if(!monthDaysOfWeek.length){
+      showAlert('addAlert', 'Please select at least one day (e.g. Mon, Thu).');
+      return;
+    }
+  }
+
+  var p = {
+    doerName       : document.getElementById('aDoer').value.trim(),
+    verifier       : document.getElementById('aVerifier').value.trim(),
+    task           : document.getElementById('aTask').value.trim(),
+    frequency      : freq,
+    weekDays       : weekDays,
+    monthDays      : document.getElementById('aMonthDates').value.trim(),
+    monthOrdinals  : monthOrdinals,
+    monthDaysOfWeek: monthDaysOfWeek || [],
+    startDate      : document.getElementById('aStart').value,
+    endDate        : document.getElementById('aEnd').value,
+    proofRequired  : document.getElementById('aProof').value === 'Yes',
+    requiresVerification: document.getElementById('aRequireVerification').value === 'Yes'
+  };
+
+  if(!p.doerName || !state.doers.some(function(d){ return d.name === p.doerName; })){
+    showAlert('addAlert','Choose a doer from the list.'); return;
+  }
+  if(!p.task){ showAlert('addAlert','Enter a task description.'); return; }
+  if(!p.startDate){ showAlert('addAlert','Choose a start date.'); return; }
+
+  busy(btn, true, 'Creating…');
+  google.script.run
+    .withSuccessHandler(function(res){ busy(btn,false); closeModal('mAdd'); toast(res.message); load(); })
+    .withFailureHandler(function(e){ busy(btn,false); showAlert('addAlert', e.message); })
+    .addChecklistSeries(p);
+}
+
+/* =============================== COMPLETE =============================== */
+function openDone(id){
+  var t = taskById(id); if(!t) return;
+  doneId = id; proofFile = null; hideAlert('doneAlert');
+  document.getElementById('dTaskInfo').textContent = t.taskId + ' — ' + t.task + ' (' + prettyDate(t.plannedDate) + ')';
+  document.getElementById('dProofWrap').style.display = t.proofReq === 'Yes' ? 'flex' : 'none';
+  document.getElementById('dDrop').textContent = 'Click to upload supporting proof';
+  document.getElementById('dFile').value = '';
+  document.getElementById('dNfReason').value = '';
+  openModal('mDone');
+}
+document.getElementById('dDrop').addEventListener('click', function(){ document.getElementById('dFile').click(); });
+function pickProof(input){
+  if(input.files[0]){
+    proofFile = input.files[0];
+    document.getElementById('dDrop').textContent = proofFile.name;
+  }
+}
+function submitDone(btn){
+  var t = taskById(doneId);
+  if(t.proofReq === 'Yes' && !proofFile && !t.proofUrl){
+    showAlert('doneAlert','Upload a proof document before completing this task.'); return; }
+  hideAlert('doneAlert');
+  busy(btn, true, 'Saving…');
+  var send = function(file){
+    google.script.run
+      .withSuccessHandler(function(res){ busy(btn,false); closeModal('mDone'); toast(res.message); load(); })
+      .withFailureHandler(function(e){ busy(btn,false); showAlert('doneAlert', e.message); })
+      .completeChecklistTask(doneId, file);
+  };
+  if(proofFile) readFile(proofFile).then(send).catch(function(e){ busy(btn,false); showAlert('doneAlert', e.message); });
+  else send(null);
+}
+function submitNonFunctional(btn){
+  var reason = document.getElementById('dNfReason').value.trim();
+  busy(btn, true, 'Saving…');
+  google.script.run
+    .withSuccessHandler(function(res){ busy(btn,false); closeModal('mDone'); toast(res.message); load(); })
+    .withFailureHandler(function(e){ busy(btn,false); showAlert('doneAlert', e.message); })
+    .markChecklistNonFunctional(doneId, reason);
+}
+
+/* =============================== REMARKS =============================== */
+function openRemark(id, type){
+  remarkBulk = false; remarkId = id; remarkType = type;
+  var t = taskById(id); if(!t) return;
+  hideAlert('remarkAlert');
+  document.getElementById('remarkTitle').textContent = (type==='md'?'Add MD remark':'Add EA remark');
+  document.getElementById('remarkScope').textContent = 'Task';
+  document.getElementById('rmInfo').textContent = t.taskId + ' — ' + t.task;
+  document.getElementById('rmText').value = '';
+  openModal('mRemark');
+}
+function openBulk(type){
+  var ids = Object.keys(state.selected);
+  if(!ids.length){ toast('Select at least one task.', true); return; }
+  remarkBulk = true; remarkType = type;
+  hideAlert('remarkAlert');
+  document.getElementById('remarkTitle').textContent = (type==='md'?'Bulk MD remark':'Bulk EA remark');
+  document.getElementById('remarkScope').textContent = 'Applies to';
+  document.getElementById('rmInfo').textContent = ids.length + ' selected task(s)';
+  document.getElementById('rmText').value = '';
+  openModal('mRemark');
+}
+function bulkDeleteSelected(){
+  if(ME.accessLevel !== 'ADMIN'){ openModal('mNoAccess'); return; }
+  var ids = Object.keys(state.selected);
+  if(!ids.length){ toast('Select at least one task.', true); return; }
+  if(!confirm('Delete ' + ids.length + ' selected task(s) permanently? This cannot be undone.')) return;
+  google.script.run
+    .withSuccessHandler(function(res){ toast(res.message); clearSelection(); load(); })
+    .withFailureHandler(function(e){ toast(e.message, true); })
+    .deleteChecklistTasksBulk(ids);
+}
+function submitRemark(btn){
+  var text = document.getElementById('rmText').value.trim();
+  if(!text){ showAlert('remarkAlert','Type a remark first.'); return; }
+  busy(btn, true, 'Saving…');
+  var ok = function(res){ busy(btn,false); closeModal('mRemark'); toast(res.message); clearSelection(); load(); };
+  var no = function(e){ busy(btn,false); showAlert('remarkAlert', e.message); };
+  if(remarkBulk){
+    google.script.run.withSuccessHandler(ok).withFailureHandler(no)
+      .addBulkChecklistRemarks(Object.keys(state.selected), text, remarkType);
+  } else {
+    google.script.run.withSuccessHandler(ok).withFailureHandler(no)
+      .addChecklistRemark(remarkId, text, remarkType);
+  }
+}
+
+function openLog(id){
+  var t = taskById(id); if(!t) return;
+  document.getElementById('logTitle').textContent = 'Task log — ' + t.taskId;
+  var items = taskLog(t);
+  document.getElementById('logBody').innerHTML = items.length
+    ? items.map(function(it){
+        return '<div class="tl-item '+it.kind+'"><div class="tl-meta"><span class="tl-tag">'+esc(it.tag)+'</span>' +
+               esc(it.when) + (it.who ? ' · ' + esc(it.who) : '') + '</div><div class="tl-text">'+esc(it.text)+'</div></div>';
+      }).join('')
+    : '<div class="empty">Nothing recorded yet.</div>';
+  openModal('mLog');
+}
+
+/* =============================== EDIT / DELETE SERIES =============================== */
+function openMasterList(){
+  hideAlert('masterAlert');
+  document.getElementById('masterBody').innerHTML = '<tr><td colspan="10" class="dash">Loading…</td></tr>';
+  openModal('mMaster');
+  google.script.run
+    .withSuccessHandler(function(list){
+      document.getElementById('masterBody').innerHTML = list.length ? list.map(function(s){
+        return '<tr>' +
+          '<td><span class="badge b-id">'+esc(s.seriesId)+'</span></td>' +
+          '<td>'+esc(s.doer)+'</td>' +
+          '<td class="cell-task">'+esc(s.task)+'</td>' +
+          '<td><span class="badge b-count">'+esc(FREQ_LABEL[s.frequency]||s.frequency)+'</span></td>' +
+          '<td class="nowrap">'+prettyDate(s.startDate)+'</td>' +
+          '<td class="nowrap">'+(s.endDate?prettyDate(s.endDate):'<span class="dash">—</span>')+'</td>' +
+          '<td><span class="badge '+(s.proofRequired==='Yes'?'b-yes':'b-no')+'">'+esc(s.proofRequired)+'</span></td>' +
+          '<td>'+esc(s.assignedBy)+'</td>' +
+          '<td class="nowrap">'+(s.lastGeneratedThrough?prettyDate(s.lastGeneratedThrough):'<span class="dash">—</span>')+'</td>' +
+          '<td class="nowrap">'+esc(s.createdAt||'—')+'</td>' +
+        '</tr>';
+      }).join('') : '<tr><td colspan="10" class="dash">No recurring series created yet.</td></tr>';
+    })
+    .withFailureHandler(function(e){ showAlert('masterAlert', e.message); })
+    .getSeriesMasterList();
+}
+var seriesSelected = {};
+
+function openSeries(){
+  if(ME.accessLevel !== 'ADMIN'){ openModal('mNoAccess'); return; }
+  hideAlert('seriesAlert');
+  seriesSelected = {};
+  document.getElementById('seriesFields').style.display = 'none';
+  document.getElementById('sSeriesList').innerHTML = '<div class="dash" style="padding:12px;">Loading…</div>';
+  document.getElementById('sDoer').value = '';
+  document.getElementById('sTask').value = '';
+  openModal('mSeries');
+  google.script.run
+    .withSuccessHandler(function(list){
+      state.series = list.filter(function(s){ return s.canManage; });
+      renderSeriesList();
+    })
+    .withFailureHandler(function(e){ showAlert('seriesAlert', e.message); })
+    .getChecklistSeries();
+}
+
+function renderSeriesList(){
+  var box = document.getElementById('sSeriesList');
+  if(!state.series.length){
+    box.innerHTML = '<div class="dash" style="padding:12px;">No recurring tasks available.</div>';
+    return;
+  }
+  box.innerHTML = state.series.map(function(s){
+    var checked = seriesSelected[s.seriesId] ? 'checked' : '';
+    return '<label style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;cursor:pointer;width:100%;box-sizing:border-box;border-bottom:1px solid #f0f2f5;">' +
+      '<input type="checkbox" value="'+esc(s.seriesId)+'" '+checked+' onchange="onSeriesCheck(this)" style="cursor:pointer;flex:0 0 16px;width:16px;height:16px;margin:2px 0 0 0;">' +
+      '<span style="font-size:13px;flex:1 1 auto;min-width:0;line-height:1.4;color:#334155;">' +
+        '<span class="badge b-id" style="margin-right:6px;">'+esc(s.seriesId)+'</span>' +
+        '<strong>'+esc(s.doer)+'</strong> — '+esc(s.task)+' <span style="color:#94a3b8;">('+esc(FREQ_LABEL[s.frequency]||s.frequency)+')</span>' +
+      '</span>' +
+    '</label>';
+  }).join('');
+}
+
+function onSeriesCheck(cb){
+  if(cb.checked) seriesSelected[cb.value] = true;
+  else delete seriesSelected[cb.value];
+  updateSeriesEditFields();
+}
+
+function updateSeriesEditFields(){
+  var ids = Object.keys(seriesSelected);
+  var wrap = document.getElementById('seriesFields');
+  if(ids.length === 1){
+    var s = state.series.filter(function(x){ return x.seriesId === ids[0]; })[0];
+    if(s){
+      document.getElementById('sDoer').value = s.doer;
+      document.getElementById('sTask').value = s.task;
+      document.getElementById('sRequireVerification').value = s.requiresVerification ? 'Yes' : 'No';
+      wrap.style.display = 'grid';
+      return;
+    }
+  }
+  wrap.style.display = 'none';
+}
+function submitSeriesUpdate(btn){
+  var ids = Object.keys(seriesSelected);
+  if(ids.length !== 1){ showAlert('seriesAlert','Tick exactly one recurring task to edit its doer, description or verification.'); return; }
+  var id = ids[0];
+  var doer = document.getElementById('sDoer').value.trim();
+  var task = document.getElementById('sTask').value.trim();
+  var reqVerif = document.getElementById('sRequireVerification').value;
+  if(doer && !state.doers.some(function(d){ return d.name === doer; })){
+    showAlert('seriesAlert','That doer is not in the Doer List.'); return; }
+  busy(btn, true, 'Saving…');
+  google.script.run
+    .withSuccessHandler(function(res){ busy(btn,false); closeModal('mSeries'); toast(res.message); load(); })
+    .withFailureHandler(function(e){ busy(btn,false); showAlert('seriesAlert', e.message); })
+    .updateChecklistSeries(id, doer, task, document.getElementById('sScope').value === 'future', reqVerif);
+}
+
+function submitSeriesDelete(btn){
+  var ids = Object.keys(seriesSelected);
+  if(!ids.length){ showAlert('seriesAlert','Tick at least one recurring task.'); return; }
+  var futureOnly = document.getElementById('sScope').value === 'future';
+  if(!confirm(futureOnly
+      ? 'Delete the remaining pending occurrences of ' + ids.length + ' recurring task(s)?'
+      : 'Delete EVERY occurrence of ' + ids.length + ' recurring task(s), including completed ones? This cannot be undone.')) return;
+  busy(btn, true, 'Deleting…');
+  google.script.run
+    .withSuccessHandler(function(res){ busy(btn,false); closeModal('mSeries'); toast(res.message); load(); })
+    .withFailureHandler(function(e){ busy(btn,false); showAlert('seriesAlert', e.message); })
+    .deleteChecklistSeriesBulk(ids, futureOnly);
+}
+
+/* =============================== EXPORT =============================== */
+function exportCsv(){
+  if(!state.filtered.length){ toast('Nothing to export.', true); return; }
+  var head = ['Task ID','Doer','Task','Frequency','Planned','Status','Actual','Proof Required','Assigned By','Task Log'];
+  var rows = [head].concat(sortRows(state.filtered, state.sort).map(function(t){
+    return [t.taskId, t.doer, t.task, FREQ_LABEL[t.frequency]||t.frequency, t.plannedDate,
+            t.status, t.actualDate, t.proofReq, t.assignedBy,
+            taskLog(t).map(function(i){ return '['+i.when+'] '+i.tag+' '+i.who+': '+i.text; }).join(' | ')];
+  }));
+  downloadCSV(rows, 'checklist-' + todayStr() + '.csv');
+}
+
+/* =============================== HOLIDAYS =============================== */
+function openHolidays(){
+  hideAlert('holidayAlert');
+  document.getElementById('hDate').value = '';
+  document.getElementById('hDesc').value = '';
+  document.getElementById('holidayBody').innerHTML = '<tr><td colspan="3" class="dash">Loading…</td></tr>';
+  openModal('mHoliday');
+  refreshHolidays();
+}
+function refreshHolidays(){
+  google.script.run
+    .withSuccessHandler(function(list){
+      document.getElementById('holidayBody').innerHTML = list.length ? list.map(function(h){
+        return '<tr><td class="nowrap">'+prettyDate(h.date)+'</td><td>'+esc(h.description||'—')+'</td>' +
+               '<td><button class="icon-btn no" data-tip="Remove" onclick="removeHoliday('+h.row+')">&times;</button></td></tr>';
+      }).join('') : '<tr><td colspan="3" class="dash">No holidays added yet.</td></tr>';
+    })
+    .withFailureHandler(function(e){ showAlert('holidayAlert', e.message); })
+    .getHolidayList();
+}
+function submitHoliday(btn){
+  var date = document.getElementById('hDate').value;
+  var desc = document.getElementById('hDesc').value.trim();
+  if(!date){ showAlert('holidayAlert','Choose a date.'); return; }
+  hideAlert('holidayAlert');
+  busy(btn, true, 'Adding…');
+  google.script.run
+    .withSuccessHandler(function(res){ busy(btn,false); toast(res.message); document.getElementById('hDate').value=''; document.getElementById('hDesc').value=''; refreshHolidays(); load(); })
+    .withFailureHandler(function(e){ busy(btn,false); showAlert('holidayAlert', e.message); })
+    .addHoliday(date, desc);
+}
+function removeHoliday(row){
+  google.script.run
+    .withSuccessHandler(function(res){ toast(res.message); refreshHolidays(); load(); })
+    .withFailureHandler(function(e){ toast(e.message, true); })
+    .deleteHoliday(row);
+}
+
+/* Unique doer names for dropdowns: no duplicates, no blanks, sorted A–Z. */
+function uniqueDoerNames(){
+  var seen = {}, out = [];
+  state.doers.forEach(function(d){
+    var n = (d.name || '').trim();
+    var key = n.toLowerCase();
+    if(!n || seen[key]) return;
+    seen[key] = true;
+    out.push(n);
+  });
+  return out.sort(function(a,b){ return a.localeCompare(b); });
+}
+
+/* =============================== INIT =============================== */
+if(CAN_MANAGE){
+  document.getElementById('btnAdd').style.display = 'inline-flex';
+  document.getElementById('btnEdit').style.display = 'inline-flex';
+  document.getElementById('btnHoliday').style.display = 'inline-flex';
+  document.getElementById('btnMaster').style.display = 'inline-flex';
+}
+/* Unique doer names for dropdowns: no duplicates, no blanks, sorted A–Z. */
+function uniqueDoerNames(){
+  var seen = {}, out = [];
+  state.doers.forEach(function(d){
+    var n = (d.name || '').trim();
+    var key = n.toLowerCase();
+    if(!n || seen[key]) return;
+    seen[key] = true;
+    out.push(n);
+  });
+  return out.sort(function(a,b){ return a.localeCompare(b); });
+}
+
+wireCombo('fName','fNameList', uniqueDoerNames, applyFilters);
+wireCombo('fTask','fTaskList', function(){
+  var seen = {};
+  return state.all.map(function(t){ return t.task; }).filter(function(v){ if(!v||seen[v]) return false; seen[v]=1; return true; });
+}, applyFilters);
+wireCombo('aDoer','aDoerList', uniqueDoerNames);
+wireCombo('sDoer','sDoerList', uniqueDoerNames);
+wireCombo('bOriginal','bOriginalList', uniqueDoerNames);
+wireCombo('bBuddy','bBuddyList', uniqueDoerNames);
+wireCombo('aVerifier','aVerifierList', uniqueDoerNames);
+/* =============================== BUDDY ============================ */
+/* =============================== BUDDY ============================ */
+function openBuddy(){
+  hideAlert('buddyAlert');
+  document.getElementById('bOriginal').value = CAN_MANAGE ? '' : ME.name;
+  document.getElementById('bBuddy').value = '';
+  document.getElementById('bFrom').value = todayStr();
+  document.getElementById('bTo').value = todayStr();
+  openModal('mBuddy');
+}
+function submitBuddy(btn){
+  var original = document.getElementById('bOriginal').value.trim();
+  var buddy    = document.getElementById('bBuddy').value.trim();
+  var from     = document.getElementById('bFrom').value;
+  var to       = document.getElementById('bTo').value;
+  if(!original || !buddy){ showAlert('buddyAlert','Choose both doers.'); return; }
+  if(!from || !to){ showAlert('buddyAlert','Choose the from and to dates.'); return; }
+  hideAlert('buddyAlert');
+  busy(btn, true, 'Saving…');
+  google.script.run
+    .withSuccessHandler(function(res){
+      busy(btn, false);
+      closeModal('mBuddy');
+      toast(res.message);
+      load();
+    })
+    .withFailureHandler(function(e){ busy(btn, false); showAlert('buddyAlert', e.message); })
+    .addBuddyAssignment(original, buddy, from, to);
+}
+
+wireSort('clTable', state, renderTable);
+markQuick();   // highlight the default "Today" quick-filter button
+load();
+</script>
+</body>
+</html>

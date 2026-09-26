@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include('Style.html'); ?>
+</head>
+<body>
+<?!= include('Navbar.html'); ?>
+
+<div class="main">
+  <div class="page-head">
+    <div>
+      <div class="page-title">Verification</div>
+      <div class="page-sub">Tasks waiting for your approval.</div>
+    </div>
+    <div class="head-actions">
+      <button class="btn btn-ghost" onclick="load()">&#8635; Refresh</button>
+      <button class="btn btn-ghost" onclick="exportCsv()">Export CSV</button>
+    </div>
+  </div>
+
+  <div class="tiles">
+    <div class="tile purple"><div class="ti">&#9200;</div><div><div class="tv" id="sTotal">0</div><div class="tl">Awaiting verification</div></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">Tasks awaiting approval</div>
+      <div id="countInfo" style="font-size:12px;color:var(--muted);"></div>
+    </div>
+    <div class="loading show" id="loading"><div class="spinner"></div>Loading…</div>
+    <div class="table-wrap" id="tableWrap" style="display:none;">
+      <table class="data" id="verTable">
+        <thead><tr>
+          <th data-key="taskId">ID</th>
+          <th data-key="assignedTo">Doer</th>
+          <th data-key="task">Task</th>
+          <th data-key="plannedDate">Planned</th>
+          <th data-key="actualDate">Submitted</th>
+          <th data-key="priority">Priority</th>
+          <th>Proof</th>
+          <th>Task log</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="emptyState" style="display:none;">
+      <span class="ei">&#9989;</span>Nothing waiting on you right now.
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="mLog">
+  <div class="modal">
+    <div class="modal-head"><h3 id="logTitle">Task log</h3><button class="modal-close" onclick="closeModal('mLog')">&times;</button></div>
+    <div class="modal-body"><div class="timeline" id="logBody"></div></div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('mLog')">Close</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="mConfirm">
+  <div class="modal slim">
+    <div class="modal-head"><h3 id="cfTitle">Confirm</h3><button class="modal-close" onclick="closeModal('mConfirm')">&times;</button></div>
+    <div class="modal-body">
+      <p id="cfText" style="font-size:13.5px;color:var(--body);"></p>
+      <div class="field" id="cfReasonWrap" style="display:none;">
+        <label class="required" for="cfReason">Reason</label>
+        <textarea id="cfReason" placeholder="Explain why this is being sent back"></textarea>
+      </div>
+      <div class="alert" id="cfAlert"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mConfirm')">Cancel</button>
+      <button class="btn btn-danger" id="cfOk">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var state = { all: [], sort: {key:'plannedDate', dir:'asc'} };
+
+var LOADED = false;
+function load(){
+  var box = document.getElementById('loading');
+  var tw  = document.getElementById('tableWrap');
+  if(!LOADED) box.classList.add('show'); else tw.classList.add('is-refreshing');
+  var done = function(){ box.classList.remove('show'); tw.classList.remove('is-refreshing'); };
+  google.script.run
+    .withSuccessHandler(function(data){ state.all = data.tasks; LOADED = true; done(); render(); })
+    .withFailureHandler(function(e){ done(); toast(e.message, true); })
+    .getVerificationBootstrap('all');
+}
+
+function taskLog(t){
+  var out = [];
+  parseRemarks(t.reason).forEach(function(i){ i.tag = 'Status'; out.push(i); });
+  parseRemarks(t.mdRemark).forEach(function(i){ i.tag = 'MD'; out.push(i); });
+  parseRemarks(t.eaRemark).forEach(function(i){ i.tag = 'EA'; out.push(i); });
+  return out.sort(function(a,b){ return (b.when||'').localeCompare(a.when||''); });
+}
+function taskById(id){ return state.all.filter(function(t){ return t.taskId === id; })[0]; }
+function openLog(id){
+  var t = taskById(id); if(!t) return;
+  document.getElementById('logTitle').textContent = 'Task log — ' + t.taskId;
+  var items = taskLog(t);
+  document.getElementById('logBody').innerHTML = items.length
+    ? items.map(function(it){
+        return '<div class="tl-item '+it.kind+'"><div class="tl-meta"><span class="tl-tag">'+esc(it.tag)+'</span>' +
+               esc(it.when) + (it.who ? ' · ' + esc(it.who) : '') + '</div><div class="tl-text">'+esc(it.text)+'</div></div>';
+      }).join('')
+    : '<div class="empty">Nothing recorded yet.</div>';
+  openModal('mLog');
+}
+
+function render(){
+  var f = state.all;
+  document.getElementById('sTotal').textContent = f.length;
+  document.getElementById('countInfo').textContent = f.length + ' task(s)';
+  if(!f.length){
+    document.getElementById('tableWrap').style.display='none';
+    document.getElementById('emptyState').style.display='block';
+    return;
+  }
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('tableWrap').style.display='block';
+
+  var sorted = sortRows(f, state.sort);
+  document.getElementById('tbody').innerHTML = sorted.map(function(t){
+    var logCount = taskLog(t).length;
+    return '<tr>' +
+    '<td><span class="badge b-id">'+esc(t.taskId)+'</span> <div style="font-size:10px;color:#888;margin-top:2px;">'+t.source+'</div></td>' +
+      '<td><span class="chip"><span class="ca">'+initials(t.assignedTo)+'</span>'+esc(t.assignedTo)+'</span></td>' +
+      '<td class="cell-task">'+nl2br(t.task)+'</td>' +
+      '<td class="nowrap">'+prettyDate(t.plannedDate)+'</td>' +
+      '<td class="nowrap">'+esc(t.actualDate || '—')+'</td>' +
+      '<td><span class="badge '+priorityClass(t.priority)+'">'+esc(t.priority)+'</span></td>' +
+      '<td>'+(t.proofUrl ? '<a href="'+esc(t.proofUrl)+'" target="_blank" class="icon-btn" data-tip="View proof">&#128444;</a>' : '<span class="dash">—</span>')+'</td>' +
+      '<td class="nowrap">'+(logCount
+          ? '<button class="link-btn" onclick="openLog(\''+t.taskId+'\')">View <span class="badge b-count">'+logCount+'</span></button>'
+          : '<span class="dash">—</span>')+'</td>' +
+      '<td><div class="actions-cell">' +
+        '<button class="icon-btn ok" data-tip="Approve" onclick="doApprove(\''+t.taskId+'\')">&#10003;</button>' +
+        '<button class="icon-btn no" data-tip="Send back" onclick="doDisapprove(\''+t.taskId+'\')">&#10007;</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function confirmAction(title, text, needReason, onOk){
+  document.getElementById('cfTitle').textContent = title;
+  document.getElementById('cfText').textContent = text;
+  document.getElementById('cfReasonWrap').style.display = needReason ? 'flex' : 'none';
+  document.getElementById('cfReason').value = '';
+  hideAlert('cfAlert');
+  var ok = document.getElementById('cfOk');
+  var fresh = ok.cloneNode(true);
+  ok.parentNode.replaceChild(fresh, ok);
+  fresh.addEventListener('click', function(){
+    var reason = document.getElementById('cfReason').value.trim();
+    if(needReason && !reason){ showAlert('cfAlert','Enter a reason.'); return; }
+    busy(fresh, true, 'Working…');
+    onOk(reason, fresh);
+  });
+  openModal('mConfirm');
+}
+function runAction(fnName, args, btn){
+  var r = google.script.run
+    .withSuccessHandler(function(res){ busy(btn,false); closeModal('mConfirm'); toast(res.message); load(); })
+    .withFailureHandler(function(e){ busy(btn,false); showAlert('cfAlert', e.message); });
+  r[fnName].apply(r, args);
+}
+function doApprove(id){
+  var t = taskById(id);
+  confirmAction('Approve task', 'Approve task ' + id + ' and close it?', false, function(_, btn){
+    var functionName = (t.source === 'Checklist') ? 'approveChecklistTask' : 'approveTask';
+    runAction(functionName, [id], btn); 
+  });
+}
+
+function doDisapprove(id){
+  var t = taskById(id);
+  confirmAction('Send task back', 'Send task ' + id + ' back to the doer for rework.', true, function(reason, btn){
+    var functionName = (t.source === 'Checklist') ? 'disapproveChecklistTask' : 'disapproveTask';
+    runAction(functionName, [id, reason], btn); 
+  });
+}
+
+function exportCsv(){
+  if(!state.all.length){ toast('Nothing to export.', true); return; }
+  var head = ['Task ID','Doer','Task','Planned','Submitted','Priority'];
+  var rows = [head].concat(state.all.map(function(t){
+    return [t.taskId, t.assignedTo, t.task, t.plannedDate, t.actualDate, t.priority];
+  }));
+  downloadCSV(rows, 'verification-' + todayStr() + '.csv');
+}
+
+wireSort('verTable', state, render);
+load();
+</script>
+</body>
+</html>

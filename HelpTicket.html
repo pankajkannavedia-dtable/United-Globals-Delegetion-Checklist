@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include('Style.html'); ?>
+</head>
+<body>
+<?!= include('Navbar.html'); ?>
+
+<div class="main">
+  <div class="page-head">
+    <div>
+      <div class="page-title">Help Ticket</div>
+      <div class="page-sub">Ask a colleague for help, track the work, verify it when it's done.</div>
+    </div>
+    <div class="head-actions">
+      <button class="btn btn-ghost" onclick="exportCsv()">Export CSV</button>
+      <button class="btn btn-primary" onclick="openRaise()">+ Raise help ticket</button>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="card card-pad" style="margin-bottom:14px;padding:9px 10px;">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <button class="btn btn-primary btn-sm" id="tabToMe"      onclick="setTab('toMe')">Assigned to me <span class="badge b-count" id="cToMe">0</span></button>
+      <button class="btn btn-ghost btn-sm"   id="tabByMe"      onclick="setTab('byMe')">Raised by me <span class="badge b-count" id="cByMe">0</span></button>
+      <button class="btn btn-ghost btn-sm"   id="tabCompleted" onclick="setTab('completed')">Completed <span class="badge b-count" id="cCompleted">0</span></button>
+    </div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filter-card">
+    <div class="filter-bar">
+      <div class="fl">&#9776; Filters <span class="filter-count" id="filterCount" style="display:none;">0</span></div>
+      <div class="fr">
+        <button class="link-btn" onclick="clearFilters()">Clear all</button>
+        <button class="chev" id="filterToggle" onclick="toggleFilters()">Hide &#9650;</button>
+      </div>
+    </div>
+    <div class="filter-body" id="filterBody">
+      <div class="filters">
+        <div class="field"><label for="fSearch">Search</label><input type="text" id="fSearch" placeholder="Keywords, ID, name"></div>
+        <div class="field combo">
+          <label for="fPerson">Person</label>
+          <input type="text" id="fPerson" placeholder="Anyone" autocomplete="off">
+          <div class="combo-list" id="fPersonList"></div>
+        </div>
+        <div class="field">
+          <label for="fStatus">Work status</label>
+          <select id="fStatus"><option value="">All</option>
+            <option>Pending</option><option>Ongoing</option>
+            <option>Dependency on third party</option><option>Revised Date</option><option>Done</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fPriority">Priority</label>
+          <select id="fPriority"><option value="">All</option>
+            <option>Critical</option><option>High</option><option>Medium</option>
+          </select>
+        </div>
+        <div class="field"><label for="fFrom">Deadline from</label><input type="date" id="fFrom"></div>
+        <div class="field"><label for="fTo">Deadline to</label><input type="date" id="fTo"></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;">
+        <button class="btn btn-ghost btn-sm" id="qOverdue" onclick="quick('overdue')">Overdue</button>
+        <button class="btn btn-ghost btn-sm" id="qAwaiting" onclick="quick('awaiting')">Awaiting my review</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TILES -->
+  <div class="tiles">
+    <div class="tile"><div class="ti">&#127915;</div><div><div class="tv" id="sTotal">0</div><div class="tl">In this view</div></div></div>
+    <div class="tile amber"><div class="ti">&#9203;</div><div><div class="tv" id="sOpen">0</div><div class="tl">Open</div></div></div>
+    <div class="tile purple"><div class="ti">&#9200;</div><div><div class="tv" id="sReview">0</div><div class="tl">Awaiting review</div></div></div>
+    <div class="tile green"><div class="ti">&#10003;</div><div><div class="tv" id="sClosed">0</div><div class="tl">Closed</div></div></div>
+    <div class="tile red"><div class="ti">&#9888;</div><div><div class="tv" id="sOverdue">0</div><div class="tl">Overdue</div></div></div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title" id="tableTitle">Tickets assigned to me</div>
+      <div id="countInfo" style="font-size:12px;color:var(--muted);"></div>
+    </div>
+    <div class="loading show" id="loading"><div class="spinner"></div>Loading tickets…</div>
+    <div class="table-wrap" id="tableWrap" style="display:none;">
+      <table class="data" id="htTable">
+        <thead><tr>
+          <th data-key="ticketId">ID</th>
+          <th data-key="timestamp">Raised</th>
+          <th data-key="raisedBy">Raised by</th>
+          <th data-key="assignedTo">Assigned to</th>
+          <th data-key="description">Request</th>
+          <th data-key="priority">Priority</th>
+          <th data-key="effectiveDeadline">Deadline</th>
+          <th data-key="s2Status">Work status</th>
+          <th>Comments</th>
+          <th>Files</th>
+          <th data-key="s3Status">Review</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="emptyState" style="display:none;">
+      <span class="ei">&#127915;</span>No matching records found. Nothing needs attention in this view.
+    </div>
+    <div class="pager" id="pager" style="display:none;">
+      <div id="pageInfo"></div>
+      <div class="pctrl">
+        <select id="pageSize" onchange="setPageSize(this.value)"><option>10</option><option selected>25</option><option>50</option><option>100</option></select>
+        <button class="pbtn" id="prevBtn" onclick="gotoPage(state.page-1)">&lsaquo;</button>
+        <span id="pageNums" style="display:flex;gap:5px;"></span>
+        <button class="pbtn" id="nextBtn" onclick="gotoPage(state.page+1)">&rsaquo;</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ STEP 1 — RAISE ============ -->
+<div class="overlay" id="mRaise">
+  <div class="modal">
+    <div class="modal-head"><h3>Raise a help ticket</h3><button class="modal-close" onclick="closeModal('mRaise')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="raiseAlert"></div>
+      <div class="grid-2">
+        <div class="field"><label>Raised by</label><div class="readout" id="rFrom"></div></div>
+        <div class="field combo">
+          <label class="required" for="rDoer">Assign to</label>
+          <input type="text" id="rDoer" placeholder="Search a colleague" autocomplete="off">
+          <div class="combo-list" id="rDoerList"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="required" for="rDesc">What do you need?</label>
+        <textarea id="rDesc" placeholder="Describe the request clearly"></textarea>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label class="required" for="rDeadline">Deadline</label>
+          <input type="date" id="rDeadline">
+        </div>
+        <div class="field">
+          <label for="rPriority">Priority</label>
+          <select id="rPriority"><option>Medium</option><option>High</option><option>Critical</option></select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Attachment</label>
+        <div class="drop" id="rDrop">Click to attach a supporting file (optional)</div>
+        <input type="file" id="rFile" style="display:none;" onchange="pickFile(this,'rDrop','raise')">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mRaise')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitRaise(this)">Raise ticket</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ STEP 2 — WORK UPDATE ============ -->
+<div class="overlay" id="mS2">
+  <div class="modal">
+    <div class="modal-head"><h3>Submit work update</h3><button class="modal-close" onclick="closeModal('mS2')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="s2Alert"></div>
+      <div class="field"><label>Ticket</label><div class="readout" id="s2Info"></div></div>
+      <div class="field">
+        <label class="required" for="s2Status">Current status</label>
+        <select id="s2Status" onchange="s2StatusChanged()">
+          <option value="">— Select —</option>
+          <option>Pending</option><option>Ongoing</option>
+          <option>Dependency on third party</option><option>Revised Date</option><option>Done</option>
+        </select>
+      </div>
+      <div class="field" id="s2DeadlineWrap" style="display:none;">
+        <label class="required" for="s2Deadline">Revised deadline</label>
+        <input type="date" id="s2Deadline">
+      </div>
+      <div class="field">
+        <label class="required" for="s2Comment">Progress comment</label>
+        <textarea id="s2Comment" placeholder="What has been done, or what is blocking it?"></textarea>
+      </div>
+      <div class="field">
+        <label>Work proof</label>
+        <div class="drop" id="s2Drop">Click to attach proof (optional)</div>
+        <input type="file" id="s2File" style="display:none;" onchange="pickFile(this,'s2Drop','s2')">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mS2')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitS2(this)">Update ticket</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ STEP 3 — REVIEW ============ -->
+<div class="overlay" id="mS3">
+  <div class="modal">
+    <div class="modal-head"><h3>Review completed work</h3><button class="modal-close" onclick="closeModal('mS3')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="s3Alert"></div>
+      <div class="field"><label>Ticket</label><div class="readout" id="s3Info"></div></div>
+      <div class="field"><label>What the doer reported</label><div class="readout" id="s3Doer"></div></div>
+      <div class="field">
+        <label class="required" for="s3Status">Decision</label>
+        <select id="s3Status">
+          <option>Verified &amp; Closed</option>
+          <option>Rejected - Reopen</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="s3Comment">Feedback</label>
+        <textarea id="s3Comment" placeholder="Required if you are sending it back"></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mS3')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitS3(this)">Complete review</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ REASSIGN ============ -->
+<div class="overlay" id="mReassign">
+  <div class="modal">
+    <div class="modal-head"><h3>Reassign ticket</h3><button class="modal-close" onclick="closeModal('mReassign')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="reassignAlert"></div>
+      <div class="field"><label>Ticket</label><div class="readout" id="raInfo"></div></div>
+      <div class="field"><label>Currently with</label><div class="readout" id="raCurrent"></div></div>
+      <div class="field combo">
+        <label class="required" for="raDoer">New doer</label>
+        <input type="text" id="raDoer" placeholder="Search a colleague" autocomplete="off">
+        <div class="combo-list" id="raDoerList"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mReassign')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitReassign(this)">Reassign</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TICKET LOG ============ -->
+<div class="overlay" id="mLog">
+  <div class="modal">
+    <div class="modal-head"><h3 id="logTitle">Ticket log</h3><button class="modal-close" onclick="closeModal('mLog')">&times;</button></div>
+    <div class="modal-body"><div class="timeline" id="logBody"></div></div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('mLog')">Close</button></div>
+  </div>
+</div>
+
+<script>
+/* =============================== STATE =============================== */
+var ME = <?!= JSON.stringify(user) ?>;
+var IS_ADMIN = ME.accessLevel === 'ADMIN';
+var state = { all:[], filtered:[], doers:[], tab:'toMe', page:1, size:25,
+              sort:{key:'ticketId', dir:'desc'}, quick:'' };
+var raiseFile = null, s2File = null, s2Id = null, s3Id = null, reassignId = null;
+
+/* =============================== LOAD =============================== */
+function load(){
+  document.getElementById('loading').classList.add('show');
+  google.script.run
+    .withSuccessHandler(function(data){
+      state.doers = data.doers.filter(function(d){
+        return (d.status||'Active').toLowerCase() !== 'inactive' && d.name !== ME.name;
+      });
+      state.all = data.tickets;
+      applyFilters();
+      document.getElementById('loading').classList.remove('show');
+    })
+    .withFailureHandler(function(e){
+      document.getElementById('loading').classList.remove('show');
+      toast(e.message, true);
+    })
+    .getHelpTicketBootstrap();
+}
+
+/* =============================== TABS =============================== */
+function setTab(tab){
+  state.tab = tab; state.page = 1;
+  [['toMe','tabToMe'],['byMe','tabByMe'],['completed','tabCompleted']].forEach(function(p){
+    document.getElementById(p[1]).className = 'btn btn-sm ' + (state.tab===p[0] ? 'btn-primary' : 'btn-ghost');
+  });
+  document.getElementById('tableTitle').textContent =
+    tab === 'toMe' ? 'Tickets assigned to me' : tab === 'byMe' ? 'Tickets raised by me' : 'Completed tickets';
+  applyFilters();
+}
+function inTab(t){
+  if(state.tab === 'completed') return t.closed;
+  if(t.closed) return false;
+  if(state.tab === 'toMe') return IS_ADMIN ? true : t.isMine;
+  return IS_ADMIN ? true : t.isOwner;
+}
+
+/* =============================== FILTERS =============================== */
+var FILTER_IDS = ['fSearch','fPerson','fStatus','fPriority','fFrom','fTo'];
+FILTER_IDS.forEach(function(id){
+  var el = document.getElementById(id);
+  el.addEventListener(id==='fSearch' ? 'input' : 'change', function(){ state.quick=''; markQuick(); applyFilters(); });
+});
+function toggleFilters(){
+  var b = document.getElementById('filterBody'), t = document.getElementById('filterToggle');
+  var hidden = b.style.display === 'none';
+  b.style.display = hidden ? 'block' : 'none';
+  t.innerHTML = hidden ? 'Hide &#9650;' : 'Show &#9660;';
+}
+function clearFilters(){
+  FILTER_IDS.forEach(function(id){ document.getElementById(id).value=''; });
+  state.quick=''; markQuick(); applyFilters();
+}
+function quick(kind){
+  state.quick = (state.quick === kind) ? '' : kind;
+  markQuick(); applyFilters();
+}
+function markQuick(){
+  [['overdue','qOverdue'],['awaiting','qAwaiting']].forEach(function(p){
+    document.getElementById(p[1]).className = 'btn btn-sm ' + (state.quick===p[0] ? 'btn-primary' : 'btn-ghost');
+  });
+}
+
+function applyFilters(){
+  var q    = document.getElementById('fSearch').value.trim().toLowerCase();
+  var who  = document.getElementById('fPerson').value.trim().toLowerCase();
+  var st   = document.getElementById('fStatus').value;
+  var pr   = document.getElementById('fPriority').value;
+  var from = document.getElementById('fFrom').value;
+  var to   = document.getElementById('fTo').value;
+  var today = todayStr();
+
+  state.filtered = state.all.filter(function(t){
+    if(!inTab(t)) return false;
+    if(q){
+      var hay = (t.ticketId+' '+t.description+' '+t.raisedBy+' '+t.assignedTo+' '+t.s2Comment).toLowerCase();
+      if(hay.indexOf(q) === -1) return false;
+    }
+    if(who && t.raisedBy.toLowerCase().indexOf(who) === -1 && t.assignedTo.toLowerCase().indexOf(who) === -1) return false;
+    if(st && t.s2Status !== st) return false;
+    if(pr && t.priority !== pr) return false;
+    if(from && (!t.effectiveDeadline || t.effectiveDeadline < from)) return false;
+    if(to   && (!t.effectiveDeadline || t.effectiveDeadline > to))   return false;
+    if(state.quick === 'overdue'  && !(!t.closed && t.effectiveDeadline && t.effectiveDeadline < today && t.s2Status !== 'Done')) return false;
+    if(state.quick === 'awaiting' && !t.canReviewS3) return false;
+    return true;
+  });
+
+  var n = FILTER_IDS.filter(function(id){ return document.getElementById(id).value.trim() !== ''; }).length
+        + (state.quick ? 1 : 0);
+  var badge = document.getElementById('filterCount');
+  badge.style.display = n ? 'inline-block' : 'none';
+  badge.textContent = n;
+
+  state.page = 1;
+  renderCounts(); renderStats(); renderTable();
+}
+
+function renderCounts(){
+  var toMe=0, byMe=0, done=0;
+  state.all.forEach(function(t){
+    if(t.closed){ done++; return; }
+    if(IS_ADMIN || t.isMine)  toMe++;
+    if(IS_ADMIN || t.isOwner) byMe++;
+  });
+  document.getElementById('cToMe').textContent = toMe;
+  document.getElementById('cByMe').textContent = byMe;
+  document.getElementById('cCompleted').textContent = done;
+}
+
+function renderStats(){
+  var f = state.filtered, today = todayStr();
+  document.getElementById('sTotal').textContent  = f.length;
+  document.getElementById('sOpen').textContent   = f.filter(function(t){ return !t.closed && t.s2Status !== 'Done'; }).length;
+  document.getElementById('sReview').textContent = f.filter(function(t){ return !t.closed && t.s2Status === 'Done'; }).length;
+  document.getElementById('sClosed').textContent = f.filter(function(t){ return t.closed; }).length;
+  document.getElementById('sOverdue').textContent =
+    f.filter(function(t){ return !t.closed && t.s2Status !== 'Done' && t.effectiveDeadline && t.effectiveDeadline < today; }).length;
+  document.getElementById('countInfo').textContent = f.length + ' ticket(s)';
+}
+
+/* =============================== TABLE =============================== */
+function s2Class(s){
+  s = (s||'').toLowerCase();
+  if(s === 'done') return 'b-completed';
+  if(s === 'ongoing') return 'b-medium';
+  if(s === 'revised date') return 'b-high';
+  if(s === 'dependency on third party') return 'b-shifted';
+  return 'b-pending';
+}
+function ticketById(id){ return state.all.filter(function(t){ return t.ticketId === id; })[0]; }
+
+function ticketLog(t){
+  var out = [];
+  parseRemarks(t.s2Comment).forEach(function(i){ i.tag = 'Doer'; out.push(i); });
+  parseRemarks(t.s3Comment).forEach(function(i){ i.tag = 'Review'; out.push(i); });
+  return out.sort(function(a,b){ return (b.when||'').localeCompare(a.when||''); });
+}
+
+function renderTable(){
+  var tb = document.getElementById('tbody');
+  if(!state.filtered.length){
+    document.getElementById('tableWrap').style.display='none';
+    document.getElementById('pager').style.display='none';
+    document.getElementById('emptyState').style.display='block';
+    return;
+  }
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('tableWrap').style.display='block';
+  document.getElementById('pager').style.display='flex';
+
+  var sorted = sortRows(state.filtered, state.sort);
+  var start = (state.page-1)*state.size;
+  var rows = sorted.slice(start, start+state.size);
+  var today = todayStr();
+
+  tb.innerHTML = rows.map(function(t){
+    var overdue = !t.closed && t.s2Status !== 'Done' && t.effectiveDeadline && t.effectiveDeadline < today;
+    var logCount = ticketLog(t).length;
+
+    var act = '';
+    if(t.canUpdateS2) act += '<button class="icon-btn" data-tip="Submit work update" onclick="openS2(\'' + t.ticketId + '\')">&#9998;</button>';
+    if(t.canReviewS3) act += '<button class="icon-btn ok" data-tip="Review and close" onclick="openS3(\'' + t.ticketId + '\')">&#10003;</button>';
+    if(t.canNotify)   act += '<button class="icon-btn" data-tip="Send reminder" onclick="doNotify(\'' + t.ticketId + '\')">&#128276;</button>';
+    if(t.canReassign && !t.closed) act += '<button class="icon-btn" data-tip="Reassign" onclick="openReassign(\'' + t.ticketId + '\')">&#8644;</button>';
+    if(!act) act = '<span class="dash">—</span>';
+
+    var files = '';
+    if(t.attachment) files += '<a href="'+esc(t.attachment)+'" target="_blank" class="icon-btn" data-tip="Request attachment">&#128206;</a> ';
+    if(t.s2Proof)    files += '<a href="'+esc(t.s2Proof)+'" target="_blank" class="icon-btn" data-tip="Work proof">&#128444;</a>';
+    if(!files) files = '<span class="dash">—</span>';
+
+    var deadlineCell = prettyDate(t.effectiveDeadline);
+    if(t.revisedDeadline) deadlineCell += '<span class="sub">revised</span>';
+    else if(overdue)      deadlineCell += '<span class="sub" style="color:var(--red)">Overdue</span>';
+
+    var review = t.s3Status
+      ? '<span class="badge '+(t.closed?'b-completed':'b-shifted')+'">'+esc(t.s3Status)+'</span>'
+      : (t.s2Status === 'Done' ? '<span class="badge b-approval">Awaiting review</span>' : '<span class="dash">—</span>');
+
+    return '<tr>' +
+      '<td><span class="badge b-id">'+esc(t.ticketId)+'</span></td>' +
+      '<td class="nowrap">'+esc(t.timestamp || '—')+'</td>' +
+      '<td><span class="chip"><span class="ca">'+initials(t.raisedBy)+'</span>'+esc(t.raisedBy)+'</span></td>' +
+      '<td><span class="chip"><span class="ca">'+initials(t.assignedTo)+'</span>'+esc(t.assignedTo)+'</span></td>' +
+      '<td class="cell-task">'+esc(t.description)+'</td>' +
+      '<td><span class="badge '+priorityClass(t.priority)+'">'+esc(t.priority)+'</span></td>' +
+      '<td class="nowrap">'+deadlineCell+'</td>' +
+      '<td><span class="badge '+s2Class(t.s2Status)+'">'+esc(t.s2Status)+'</span></td>' +
+      '<td class="nowrap">'+(logCount
+          ? '<button class="link-btn" onclick="openLog(\''+t.ticketId+'\')">View <span class="badge b-count">'+logCount+'</span></button>'
+          : '<span class="dash">—</span>')+'</td>' +
+      '<td class="nowrap">'+files+'</td>' +
+      '<td class="nowrap">'+review+'</td>' +
+      '<td><div class="actions-cell">'+act+'</div></td>' +
+    '</tr>';
+  }).join('');
+
+  renderPager();
+}
+
+function renderPager(){
+  var total = state.filtered.length, pages = Math.max(1, Math.ceil(total/state.size));
+  var start = (state.page-1)*state.size;
+  document.getElementById('pageInfo').textContent =
+    'Showing ' + (start+1) + '–' + Math.min(start+state.size, total) + ' of ' + total;
+  document.getElementById('prevBtn').disabled = state.page <= 1;
+  document.getElementById('nextBtn').disabled = state.page >= pages;
+  var nums='', f=Math.max(1,state.page-2), to=Math.min(pages,f+4);
+  for(var p=f;p<=to;p++) nums += '<button class="pbtn '+(p===state.page?'active':'')+'" onclick="gotoPage('+p+')">'+p+'</button>';
+  document.getElementById('pageNums').innerHTML = nums;
+}
+function gotoPage(p){
+  var pages = Math.max(1, Math.ceil(state.filtered.length/state.size));
+  state.page = Math.min(Math.max(1,p), pages); renderTable();
+}
+function setPageSize(v){ state.size = Number(v); state.page = 1; renderTable(); }
+
+/* =============================== FILE PICKERS =============================== */
+function pickFile(input, dropId, which){
+  if(!input.files[0]) return;
+  if(which === 'raise') raiseFile = input.files[0]; else s2File = input.files[0];
+  document.getElementById(dropId).textContent = input.files[0].name;
+}
+document.getElementById('rDrop').addEventListener('click', function(){ document.getElementById('rFile').click(); });
+document.getElementById('s2Drop').addEventListener('click', function(){ document.getElementById('s2File').click(); });
+
+/* =============================== STEP 1 =============================== */
+function openRaise(){
+  hideAlert('raiseAlert');
+  document.getElementById('rFrom').textContent = ME.name;
+  ['rDoer','rDesc'].forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('rDeadline').value = todayStr();
+  document.getElementById('rDeadline').min = todayStr();
+  document.getElementById('rPriority').value = 'Medium';
+  raiseFile = null;
+  document.getElementById('rFile').value = '';
+  document.getElementById('rDrop').textContent = 'Click to attach a supporting file (optional)';
+  openModal('mRaise');
+}
+function submitRaise(btn){
+  hideAlert('raiseAlert');
+  var p = {
+    assignedTo : document.getElementById('rDoer').value.trim(),
+    description: document.getElementById('rDesc').value.trim(),
+    deadline   : document.getElementById('rDeadline').value,
+    priority   : document.getElementById('rPriority').value
+  };
+  if(!p.assignedTo || !state.doers.some(function(d){ return d.name === p.assignedTo; })){
+    showAlert('raiseAlert','Choose a colleague from the list.'); return; }
+  if(!p.description){ showAlert('raiseAlert','Describe what you need.'); return; }
+  if(!p.deadline){ showAlert('raiseAlert','Choose a deadline.'); return; }
+
+  busy(btn, true, 'Raising…');
+  var send = function(file){
+    if(file) p.attachment = file;
+    google.script.run
+      .withSuccessHandler(function(res){ busy(btn,false); closeModal('mRaise'); toast(res.message); load(); })
+      .withFailureHandler(function(e){ busy(btn,false); showAlert('raiseAlert', e.message); })
+      .raiseHelpTicket(p);
+  };
+  if(raiseFile) readFile(raiseFile).then(send).catch(function(e){ busy(btn,false); showAlert('raiseAlert', e.message); });
+  else send(null);
+}
+
+/* =============================== STEP 2 =============================== */
+function openS2(id){
+  var t = ticketById(id); if(!t) return;
+  s2Id = id; s2File = null; hideAlert('s2Alert');
+  document.getElementById('s2Info').textContent = t.ticketId + ' — ' + t.description;
+  document.getElementById('s2Status').value = '';
+  document.getElementById('s2Comment').value = '';
+  document.getElementById('s2Deadline').value = '';
+  document.getElementById('s2Deadline').min = todayStr();
+  document.getElementById('s2DeadlineWrap').style.display = 'none';
+  document.getElementById('s2File').value = '';
+  document.getElementById('s2Drop').textContent = 'Click to attach proof (optional)';
+  openModal('mS2');
+}
+function s2StatusChanged(){
+  var v = document.getElementById('s2Status').value;
+  document.getElementById('s2DeadlineWrap').style.display = (v === 'Revised Date') ? 'flex' : 'none';
+}
+function submitS2(btn){
+  hideAlert('s2Alert');
+  var p = {
+    ticketId   : s2Id,
+    status     : document.getElementById('s2Status').value,
+    comment    : document.getElementById('s2Comment').value.trim(),
+    newDeadline: document.getElementById('s2Deadline').value
+  };
+  if(!p.status){ showAlert('s2Alert','Choose a status.'); return; }
+  if(!p.comment){ showAlert('s2Alert','Add a comment describing the progress.'); return; }
+  if(p.status === 'Revised Date' && !p.newDeadline){ showAlert('s2Alert','Choose the revised deadline.'); return; }
+
+  busy(btn, true, 'Saving…');
+  var send = function(file){
+    if(file) p.proof = file;
+    google.script.run
+      .withSuccessHandler(function(res){ busy(btn,false); closeModal('mS2'); toast(res.message); load(); })
+      .withFailureHandler(function(e){ busy(btn,false); showAlert('s2Alert', e.message); })
+      .updateHelpTicketS2(p);
+  };
+  if(s2File) readFile(s2File).then(send).catch(function(e){ busy(btn,false); showAlert('s2Alert', e.message); });
+  else send(null);
+}
+
+/* =============================== STEP 3 =============================== */
+function openS3(id){
+  var t = ticketById(id); if(!t) return;
+  s3Id = id; hideAlert('s3Alert');
+  document.getElementById('s3Info').textContent = t.ticketId + ' — ' + t.description;
+  var log = parseRemarks(t.s2Comment);
+  document.getElementById('s3Doer').textContent = log.length ? log[log.length-1].text : 'No comment recorded.';
+  document.getElementById('s3Status').value = 'Verified & Closed';
+  document.getElementById('s3Comment').value = '';
+  openModal('mS3');
+}
+function submitS3(btn){
+  hideAlert('s3Alert');
+  var p = {
+    ticketId: s3Id,
+    status  : document.getElementById('s3Status').value,
+    comment : document.getElementById('s3Comment').value.trim()
+  };
+  if(p.status === 'Rejected - Reopen' && !p.comment){
+    showAlert('s3Alert','Add feedback explaining what still needs doing.'); return; }
+  busy(btn, true, 'Saving…');
+  google.script.run
+    .withSuccessHandler(function(res){ busy(btn,false); closeModal('mS3'); toast(res.message); load(); })
+    .withFailureHandler(function(e){ busy(btn,false); showAlert('s3Alert', e.message); })
+    .reviewHelpTicketS3(p);
+}
+
+/* =============================== REASSIGN / NOTIFY / LOG =============================== */
+function openReassign(id){
+  var t = ticketById(id); if(!t) return;
+  reassignId = id; hideAlert('reassignAlert');
+  document.getElementById('raInfo').textContent = t.ticketId + ' — ' + t.description;
+  document.getElementById('raCurrent').textContent = t.assignedTo;
+  document.getElementById('raDoer').value = '';
+  openModal('mReassign');
+}
+function submitReassign(btn){
+  var doer = document.getElementById('raDoer').value.trim();
+  if(!doer || !state.doers.some(function(d){ return d.name === doer; })){
+    showAlert('reassignAlert','Choose a colleague from the list.'); return; }
+  busy(btn, true, 'Reassigning…');
+  google.script.run
+    .withSuccessHandler(function(res){ busy(btn,false); closeModal('mReassign'); toast(res.message); load(); })
+    .withFailureHandler(function(e){ busy(btn,false); showAlert('reassignAlert', e.message); })
+    .reassignHelpTicket(reassignId, doer);
+}
+function doNotify(id){
+  toast('Sending reminder…');
+  google.script.run
+    .withSuccessHandler(function(res){ toast(res.message); load(); })
+    .withFailureHandler(function(e){ toast(e.message, true); })
+    .notifyHelpTicketDoer(id);
+}
+function openLog(id){
+  var t = ticketById(id); if(!t) return;
+  document.getElementById('logTitle').textContent = 'Ticket log — ' + t.ticketId;
+  var items = ticketLog(t);
+  document.getElementById('logBody').innerHTML = items.length
+    ? items.map(function(it){
+        return '<div class="tl-item '+it.kind+'"><div class="tl-meta"><span class="tl-tag">'+esc(it.tag)+'</span>' +
+               esc(it.when) + (it.who ? ' · ' + esc(it.who) : '') + '</div><div class="tl-text">'+esc(it.text)+'</div></div>';
+      }).join('')
+    : '<div class="empty">Nothing recorded yet.</div>';
+  openModal('mLog');
+}
+
+/* =============================== EXPORT =============================== */
+function exportCsv(){
+  if(!state.filtered.length){ toast('Nothing to export.', true); return; }
+  var head = ['Ticket ID','Raised','Raised By','Assigned To','Request','Priority','Deadline',
+              'Revised Deadline','Work Status','Review Status','Last Notified','Log'];
+  var rows = [head].concat(sortRows(state.filtered, state.sort).map(function(t){
+    return [t.ticketId,t.timestamp,t.raisedBy,t.assignedTo,t.description,t.priority,t.deadline,
+            t.revisedDeadline,t.s2Status,t.s3Status,t.lastNotified,
+            ticketLog(t).map(function(i){ return '['+i.when+'] '+i.tag+' '+i.who+': '+i.text; }).join(' | ')];
+  }));
+  downloadCSV(rows, 'help-tickets-' + todayStr() + '.csv');
+}
+
+/* =============================== INIT =============================== */
+wireCombo('fPerson','fPersonList', function(){
+  var seen = {}, out = [];
+  state.all.forEach(function(t){
+    [t.raisedBy, t.assignedTo].forEach(function(n){ if(n && !seen[n]){ seen[n]=1; out.push(n); } });
+  });
+  return out;
+}, applyFilters);
+wireCombo('rDoer','rDoerList',  function(){ return state.doers.map(function(d){ return d.name; }); });
+wireCombo('raDoer','raDoerList',function(){ return state.doers.map(function(d){ return d.name; }); });
+
+wireSort('htTable', state, renderTable);
+setTab('toMe');
+load();
+</script>
+</body>
+</html>

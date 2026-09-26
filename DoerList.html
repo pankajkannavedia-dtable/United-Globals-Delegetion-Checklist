@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include('Style.html'); ?>
+</head>
+<body>
+<?!= include('Navbar.html'); ?>
+
+<div class="main">
+  <div class="page-head">
+    <div>
+      <div class="page-title">Doer List</div>
+      <div class="page-sub">Who can sign in, and what each person is allowed to do.</div>
+    </div>
+    <div class="head-actions">
+      <button class="btn btn-ghost" onclick="exportCsv()">Export CSV</button>
+      <button class="btn btn-primary" onclick="openDoer(null)">+ Add doer</button>
+    </div>
+  </div>
+
+  <div class="tiles">
+    <div class="tile"><div class="ti">👥</div><div><div class="tv" id="sTotal">0</div><div class="tl">Total doers</div></div></div>
+    <div class="tile green"><div class="ti">✓</div><div><div class="tv" id="sActive">0</div><div class="tl">Active</div></div></div>
+    <div class="tile red"><div class="ti">⛔</div><div><div class="tv" id="sInactive">0</div><div class="tl">Inactive</div></div></div>
+    <div class="tile blue"><div class="ti">🏷</div><div><div class="tv" id="sRoles">0</div><div class="tl">Distinct roles</div></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">People</div>
+      <div class="field" style="max-width:260px;">
+        <input type="text" id="search" placeholder="Search name, email or role" oninput="render()">
+      </div>
+    </div>
+    <div class="loading show" id="loading"><div class="spinner"></div>Loading the doer list…</div>
+    <div class="table-wrap" id="tableWrap" style="display:none;">
+      <table class="data" id="doerTable">
+       <thead><tr>
+          <th data-key="name">Name</th><th data-key="email">Email</th><th data-key="role">Role</th>
+          <th data-key="mobile">Mobile</th><th data-key="weeklyOff">Weekly Off</th><th data-key="role1">Access level</th>
+          <th data-key="status">Status</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="emptyState" style="display:none;">
+      <span class="ei">👤</span>No matching records found. Add your first doer to get started.
+    </div>
+    <div class="pager" id="pager" style="display:none;">
+      <div id="pageInfo"></div>
+      <div class="pctrl">
+        <select id="pageSize" onchange="setPageSize(this.value)"><option>10</option><option>25</option><option>50</option><option>100</option></select>
+        <button class="pbtn" id="prevBtn" onclick="gotoPage(state.page-1)">‹</button>
+        <span id="pageNums" style="display:flex;gap:5px;"></span>
+        <button class="pbtn" id="nextBtn" onclick="gotoPage(state.page+1)">›</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="mDoer">
+  <div class="modal">
+    <div class="modal-head"><h3 id="doerTitle">Add doer</h3><button class="modal-close" onclick="closeModal('mDoer')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="doerAlert"></div>
+      <div class="grid-2">
+        <div class="field"><label class="required" for="dName">Name</label>
+          <input type="text" id="dName" placeholder="Full name as they will type it at sign-in"></div>
+        <div class="field"><label class="required" for="dEmail">Email</label>
+          <input type="email" id="dEmail" placeholder="name@company.com"></div>
+      </div>
+           <div class="grid-2">
+        <div class="field"><label for="dRole">Role (job title)</label>
+          <input type="text" id="dRole" placeholder="e.g. MIS Executive"></div>
+        <div class="field"><label for="dMobile">Mobile</label>
+          <input type="text" id="dMobile" placeholder="10-digit number"></div>
+      </div>
+      <div class="field">
+        <label for="dPassword">Password</label>
+        <input type="text" id="dPassword" placeholder="Leave blank to keep the existing password">
+        <span class="hint">Required when adding a new doer. When editing, leave blank to keep their current password unchanged.</span>
+      </div>
+     <div class="grid-2">
+        <div class="field"><label class="required" for="dWeeklyOff">Weekly Off</label>
+          <select id="dWeeklyOff">
+            <option>Sunday</option><option>Monday</option><option>Tuesday</option>
+            <option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option>
+          </select>
+        </div>
+        <div class="field"><label class="required" for="dRole1">Access level</label>
+          <select id="dRole1">
+            <option value="Doer">Doer — sees only their own tasks</option>
+            <option value="TL">TL — assigns and manages the tasks they create</option>
+            <option value="Admin">Admin — full access, approves and manages people</option>
+          </select>
+          <span class="hint">This is what controls permissions, not the job title above.</span>
+        </div>
+        <div class="field"><label for="dStatus">Status</label>
+          <select id="dStatus"><option>Active</option><option>Inactive</option></select>
+          <span class="hint">Inactive people cannot sign in.</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mDoer')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDoerForm(this)">Save doer</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="mConfirm">
+  <div class="modal" style="max-width:430px;">
+    <div class="modal-head"><h3>Remove doer</h3><button class="modal-close" onclick="closeModal('mConfirm')">&times;</button></div>
+    <div class="modal-body">
+      <p id="cfText" style="font-size:14px;color:#4a5170;"></p>
+      <div class="alert" id="cfAlert"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mConfirm')">Cancel</button>
+      <button class="btn btn-danger" id="cfOk">Remove</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SHIFT PENDING TASKS ============ -->
+<div class="overlay" id="mShift">
+  <div class="modal">
+    <div class="modal-head"><h3>Shift pending tasks</h3><button class="modal-close" onclick="closeModal('mShift')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert alert-info show" id="shiftInfo"></div>
+      <div class="alert" id="shiftAlert"></div>
+      <div class="field combo">
+        <label class="required" for="shNewDoer">Move their pending work to</label>
+        <input type="text" id="shNewDoer" placeholder="Search a doer" autocomplete="off">
+        <div class="combo-list" id="shNewDoerList"></div>
+        <span class="hint">Delegation tasks not yet Completed, and Checklist tasks not yet Done, will be moved. Completed/Done work stays as history.</span>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="shiftSkip">Skip — proceed without shifting</button>
+      <button class="btn btn-primary" id="shiftOk">Shift &amp; continue</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var doers = [], editingRow = null;
+var state = { page:1, size:10, sort:{key:'name',dir:'asc'} };
+
+var LOADED = false;
+function load(){
+  var box = document.getElementById('loading');
+  var tw  = document.getElementById('tableWrap');
+  if(!LOADED) box.classList.add('show'); else tw.classList.add('is-refreshing');
+  var done = function(){ box.classList.remove('show'); tw.classList.remove('is-refreshing'); };
+  google.script.run
+    .withSuccessHandler(function(list){ doers = list; LOADED = true; done(); render(); })
+    .withFailureHandler(function(e){ done(); toast(e.message, true); })
+    .getDoers();
+}
+
+function visible(){
+  var q = document.getElementById('search').value.trim().toLowerCase();
+  state.page = state.page || 1;
+  if(!q) return doers;
+  return doers.filter(function(d){
+    return (d.name+' '+d.email+' '+d.role+' '+d.role1).toLowerCase().indexOf(q) > -1;
+  });
+}
+
+function render(){
+  var list = sortRows(visible(), state.sort);
+  var roles = {};
+  doers.forEach(function(d){ if(d.role) roles[d.role.toLowerCase()] = 1; });
+  document.getElementById('sTotal').textContent    = doers.length;
+  document.getElementById('sActive').textContent   = doers.filter(function(d){ return (d.status||'Active').toLowerCase() !== 'inactive'; }).length;
+  document.getElementById('sInactive').textContent = doers.filter(function(d){ return (d.status||'').toLowerCase() === 'inactive'; }).length;
+  document.getElementById('sRoles').textContent    = Object.keys(roles).length;
+
+  if(!list.length){
+    document.getElementById('tableWrap').style.display='none';
+    document.getElementById('pager').style.display='none';
+    document.getElementById('emptyState').style.display='block'; return;
+  }
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('tableWrap').style.display='block';
+  document.getElementById('pager').style.display='flex';
+
+  var pages = Math.max(1, Math.ceil(list.length/state.size));
+  if(state.page > pages) state.page = pages;
+  var start = (state.page-1)*state.size;
+  var pageRows = list.slice(start, start+state.size);
+
+  document.getElementById('pageInfo').textContent =
+    'Showing ' + (start+1) + '–' + Math.min(start+state.size, list.length) + ' of ' + list.length;
+  document.getElementById('prevBtn').disabled = state.page <= 1;
+  document.getElementById('nextBtn').disabled = state.page >= pages;
+  var nums='', f=Math.max(1,state.page-2), t=Math.min(pages,f+4);
+  for(var pg=f;pg<=t;pg++) nums += '<button class="pbtn '+(pg===state.page?'active':'')+'" onclick="gotoPage('+pg+')">'+pg+'</button>';
+  document.getElementById('pageNums').innerHTML = nums;
+
+  document.getElementById('tbody').innerHTML = pageRows.map(function(d){
+    var accessBadge = d.access === 'ADMIN' ? 'b-critical' : d.access === 'TL' ? 'b-high' : 'b-medium';
+    var active = (d.status||'Active').toLowerCase() !== 'inactive';
+    return '<tr>' +
+      '<td><span class="chip"><span class="ca">'+initials(d.name)+'</span>'+esc(d.name)+'</span></td>' +
+      '<td>'+esc(d.email)+'</td>' +
+      '<td>'+esc(d.role || '—')+'</td>' +
+      '<td class="nowrap">'+esc(d.mobile || '—')+'</td>' +
+      '<td><span class="badge b-count">'+esc(d.weeklyOff || 'Sunday')+'</span></td>' +
+      '<td><span class="badge '+accessBadge+'">'+esc(d.role1 || 'Doer')+'</span></td>' +
+      '<td><span class="badge '+(active?'b-yes':'b-no')+'">'+(active?'Active':'Inactive')+'</span></td>' +
+      '<td><div class="actions-cell">' +
+        '<button class="icon-btn" data-tip="Edit" onclick="openDoer('+d.row+')">✎</button>' +
+        '<button class="icon-btn no" data-tip="Remove" onclick="confirmDelete('+d.row+')">🗑</button>' +
+      '</div></td></tr>';
+  }).join('');
+}
+
+function gotoPage(p){
+  var pages = Math.max(1, Math.ceil(sortRows(visible(), state.sort).length/state.size));
+  state.page = Math.min(Math.max(1,p), pages); render();
+}
+function setPageSize(v){ state.size = Number(v); state.page = 1; render(); }
+
+function openDoer(row){
+  hideAlert('doerAlert');
+  editingRow = row;
+  var d = row ? doers.filter(function(x){ return x.row === row; })[0] : null;
+  document.getElementById('doerTitle').textContent = d ? 'Edit doer' : 'Add doer';
+  document.getElementById('dName').value   = d ? d.name : '';
+  document.getElementById('dEmail').value  = d ? d.email : '';
+  document.getElementById('dRole').value   = d ? d.role : '';
+  document.getElementById('dMobile').value = d ? d.mobile : '';
+  document.getElementById('dWeeklyOff').value = d ? (d.weeklyOff || 'Sunday') : 'Sunday';
+  document.getElementById('dRole1').value  = d ? (['Admin','TL','Doer'].indexOf(d.role1) > -1 ? d.role1 : 'Doer') : 'Doer';
+  document.getElementById('dStatus').value = d ? ((d.status||'Active').toLowerCase()==='inactive' ? 'Inactive' : 'Active') : 'Active';
+  document.getElementById('dPassword').value = '';
+  openModal('mDoer');
+}
+
+function saveDoerForm(btn){
+  var payload = {
+    row      : editingRow,
+    name     : document.getElementById('dName').value.trim(),
+    email    : document.getElementById('dEmail').value.trim(),
+    role     : document.getElementById('dRole').value.trim(),
+    mobile   : document.getElementById('dMobile').value.trim(),
+    weeklyOff: document.getElementById('dWeeklyOff').value,
+    role1    : document.getElementById('dRole1').value,
+    status   : document.getElementById('dStatus').value,
+    password : document.getElementById('dPassword').value
+  };
+  if(!payload.name || !payload.email){ showAlert('doerAlert','Name and email are both required.'); return; }
+  if(!editingRow && !payload.password){ showAlert('doerAlert','Set a password for this new doer.'); return; }
+  hideAlert('doerAlert');
+
+  var existing = editingRow ? doers.filter(function(x){ return x.row === editingRow; })[0] : null;
+  var goingInactive = existing && (existing.status||'Active').toLowerCase() !== 'inactive' &&
+                       payload.status === 'Inactive';
+
+  var doSave = function(){
+    busy(btn, true, 'Saving…');
+    google.script.run
+      .withSuccessHandler(function(res){ busy(btn,false); closeModal('mDoer'); toast(res.message); load(); })
+      .withFailureHandler(function(e){ busy(btn,false); showAlert('doerAlert', e.message); })
+      .saveDoer(payload);
+  };
+
+  if(goingInactive){
+    google.script.run
+      .withSuccessHandler(function(counts){
+        var total = counts.delegation + counts.checklist;
+        if(total > 0) openShiftThenAct(existing, counts, doSave);
+        else doSave();
+      })
+      .withFailureHandler(function(e){ showAlert('doerAlert', e.message); })
+      .getDoerPendingTaskCounts(payload.name);
+  } else {
+    doSave();
+  }
+}
+
+function confirmDelete(row){
+  var d = doers.filter(function(x){ return x.row === row; })[0];
+  google.script.run
+    .withSuccessHandler(function(counts){
+      var total = counts.delegation + counts.checklist;
+      if(total > 0){
+        openShiftThenAct(d, counts, function(){ proceedDelete(row, d); });
+      } else {
+        proceedDelete(row, d);
+      }
+    })
+    .withFailureHandler(function(e){ toast(e.message, true); })
+    .getDoerPendingTaskCounts(d.name);
+}
+
+function proceedDelete(row, d){
+  hideAlert('cfAlert');
+  document.getElementById('cfText').textContent =
+    'Remove ' + d.name + ' from the doer list? They will no longer be able to sign in. Their past tasks stay in the Master sheet.';
+  var ok = document.getElementById('cfOk');
+  var fresh = ok.cloneNode(true);
+  ok.parentNode.replaceChild(fresh, ok);
+  fresh.addEventListener('click', function(){
+    busy(fresh, true, 'Removing…');
+    google.script.run
+      .withSuccessHandler(function(res){ busy(fresh,false); closeModal('mConfirm'); toast(res.message); load(); })
+      .withFailureHandler(function(e){ busy(fresh,false); showAlert('cfAlert', e.message); })
+      .deleteDoer(row);
+  });
+  openModal('mConfirm');
+}
+
+/* =============================== SHIFT PENDING TASKS =============================== */
+function openShiftThenAct(d, counts, onProceed){
+  hideAlert('shiftAlert');
+  document.getElementById('shiftInfo').textContent =
+    d.name + ' has ' + counts.delegation + ' open delegation task(s) and ' + counts.checklist +
+    ' open checklist task(s). Choose someone to take over this work before continuing.';
+  document.getElementById('shNewDoer').value = '';
+  openModal('mShift');
+
+  var okBtn = document.getElementById('shiftOk');
+  var skipBtn = document.getElementById('shiftSkip');
+  var freshOk = okBtn.cloneNode(true);
+  var freshSkip = skipBtn.cloneNode(true);
+  okBtn.parentNode.replaceChild(freshOk, okBtn);
+  skipBtn.parentNode.replaceChild(freshSkip, skipBtn);
+
+  freshOk.addEventListener('click', function(){
+    var newDoer = document.getElementById('shNewDoer').value.trim();
+    if(!newDoer){ showAlert('shiftAlert','Choose who should take over this work.'); return; }
+    if(!doers.some(function(x){ return x.name === newDoer && x.row !== d.row; })){
+      showAlert('shiftAlert','Choose a different, valid doer from the list.'); return; }
+    busy(freshOk, true, 'Shifting…');
+    google.script.run
+      .withSuccessHandler(function(res){ busy(freshOk,false); closeModal('mShift'); toast(res.message); onProceed(); })
+      .withFailureHandler(function(e){ busy(freshOk,false); showAlert('shiftAlert', e.message); })
+      .shiftDoerPendingTasks(d.name, newDoer);
+  });
+  freshSkip.addEventListener('click', function(){ closeModal('mShift'); onProceed(); });
+}
+
+wireCombo('shNewDoer','shNewDoerList', function(){ return doers.map(function(d){ return d.name; }); });
+
+function exportCsv(){
+  var list = visible();
+  if(!list.length){ toast('Nothing to export.', true); return; }
+  var rows = [['Name','Email','Role','Mobile','Weekly Off','Access Level','Status']].concat(list.map(function(d){
+    return [d.name, d.email, d.role, d.mobile, d.weeklyOff, d.role1, d.status];
+  }));
+  downloadCSV(rows, 'doer-list-' + todayStr() + '.csv');
+}
+
+wireSort('doerTable', state, render);
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include('Style.html'); ?>
+</head>
+<body>
+
+<? if (showLogin) { ?>
+<!-- ======================= LOGIN ======================= -->
+<div class="login-wrap">
+  <div class="login-brand">
+    <img src="<?= logoSrc ?>" alt="<?= cfg.COMPANY_NAME ?>" onerror="this.style.display='none'">
+    <div>
+      <h2>Delegate better.<br>Deliver <em>excellence.</em></h2>
+      <p>Assign work, track every revision, and approve completed tasks — with a clear record of who promised what, and when.</p>
+    </div>
+    <div class="feature-row">
+      <div class="feature">
+        <div class="fi">&#128274;</div>
+        <div class="ft">Secure access</div>
+        <div class="fd">Role-based sign-in for admins, team leads and doers</div>
+      </div>
+      <div class="feature">
+        <div class="fi">&#128203;</div>
+        <div class="ft">Task delegation</div>
+        <div class="fd">Assign, revise and approve in one place</div>
+      </div>
+      <div class="feature">
+        <div class="fi">&#128202;</div>
+        <div class="ft">Live insights</div>
+        <div class="fd">Scorecards that show who is delivering</div>
+      </div>
+    </div>
+    <div class="login-note">&#128737; Your data stays inside your own Google Workspace.</div>
+  </div>
+
+  <div class="login-panel">
+    <div class="login-card">
+      <div class="lmark"><img src="<?= logoSrc ?>" alt="" onerror="this.style.display='none'"></div>
+      <h1>Welcome back</h1>
+      <p class="sub">Sign in to continue to <?= cfg.COMPANY_NAME ?> <?= cfg.COMPANY_TAGLINE ?></p>
+
+      <? if (loginError) { ?>
+        <div class="alert alert-error show" style="margin-bottom:14px;"><?= loginError ?></div>
+      <? } ?>
+
+          <form onsubmit="return false;" id="loginForm">
+  <div class="field">
+    <label class="required" for="loginEmail">Email address</label>
+    <input type="email" id="loginEmail" placeholder="" required autocomplete="email">
+  </div>
+ <div class="field">
+  <label class="required" for="loginPassword">Password</label>
+  <div style="position:relative;">
+    <input type="password" id="loginPassword" placeholder="" required autocomplete="current-password" style="padding-right:42px;">
+    <button type="button" id="togglePwBtn" onclick="togglePasswordVisibility()" title="Show password" aria-label="Show password"
+            style="position:absolute;right:4px;top:50%;transform:translateY(-50%);
+                   background:none;border:none;cursor:pointer;padding:6px 8px;
+                   color:var(--muted);display:flex;align-items:center;">
+      <svg id="eyeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+    </button>
+  </div>
+</div>
+  <div style="text-align:right;margin:-4px 0 12px;">
+    <a href="#" onclick="showForgot(true);return false;" style="font-size:13px;color:var(--muted);">Forgot password?</a>
+  </div>
+  <button type="submit" class="btn btn-primary btn-block" id="loginBtn">Sign in</button>
+</form>
+
+<div id="forgotBox" style="display:none;">
+  <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">
+    Enter your email and choose a new password.
+  </p>
+  <div class="field">
+    <label class="required" for="forgotEmail">Email address</label>
+    <input type="email" id="forgotEmail" autocomplete="email">
+  </div>
+  <div class="field">
+    <label class="required" for="forgotNew">New password</label>
+    <input type="password" id="forgotNew" autocomplete="new-password">
+  </div>
+  <div class="field">
+    <label class="required" for="forgotConfirm">Confirm new password</label>
+    <input type="password" id="forgotConfirm" autocomplete="new-password">
+  </div>
+  <button type="button" class="btn btn-primary btn-block" id="forgotBtn" onclick="submitForgot()">Reset password</button>
+  <div style="text-align:center;margin-top:12px;">
+    <a href="#" onclick="showForgot(false);return false;" style="font-size:13px;color:var(--muted);">&larr; Back to sign in</a>
+  </div>
+</div>
+
+      <div class="login-foot">
+
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+function showForgot(show){
+  document.getElementById('loginForm').style.display = show ? 'none' : 'block';
+  document.getElementById('forgotBox').style.display = show ? 'block' : 'none';
+  if(show) document.getElementById('forgotEmail').value = document.getElementById('loginEmail').value.trim();
+}
+
+
+function submitForgot(){
+  var em = document.getElementById('forgotEmail').value.trim();
+  var nw = document.getElementById('forgotNew').value;
+  var cf = document.getElementById('forgotConfirm').value;
+  if(!em || !nw || !cf){ alert('Fill in all fields.'); return; }
+  if(nw.length < 6){ alert('New password must be at least 6 characters.'); return; }
+  if(nw !== cf){ alert('New passwords do not match.'); return; }
+  var b = document.getElementById('forgotBtn');
+  b.disabled = true; b.textContent = 'Updating…';
+  google.script.run
+    .withSuccessHandler(function(res){
+      b.disabled = false; b.textContent = 'Reset password';
+      alert(res.message);
+      if(res.success){
+        document.getElementById('loginEmail').value = em;
+        document.getElementById('loginPassword').value = '';
+        document.getElementById('forgotNew').value = '';
+        document.getElementById('forgotConfirm').value = '';
+        showForgot(false);
+      }
+    })
+    .withFailureHandler(function(err){
+      b.disabled = false; b.textContent = 'Reset password'; alert(err.message);
+    })
+    .forgotPassword(em, nw);
+}
+
+     function togglePasswordVisibility(){
+  var pw = document.getElementById('loginPassword');
+  var btn = document.getElementById('togglePwBtn');
+  var icon = document.getElementById('eyeIcon');
+  var show = pw.type === 'password';
+
+  pw.type = show ? 'text' : 'password';
+  btn.title = show ? 'Hide password' : 'Show password';
+  btn.setAttribute('aria-label', btn.title);
+
+  icon.innerHTML = show
+    ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>' +
+      '<path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>' +
+      '<path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/>' +
+      '<line x1="1" y1="1" x2="23" y2="23"/>'
+    : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>' +
+      '<circle cx="12" cy="12" r="3"/>';
+}
+  document.getElementById('loginForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    var b = document.getElementById('loginBtn');
+    b.disabled = true; b.textContent = 'Signing in…';
+    google.script.run
+      .withSuccessHandler(function(res){
+            if(res.success){
+          window.top.location.href = '<?= appUrl ?>';
+        } else {
+          b.disabled = false; b.textContent = 'Sign in'; alert(res.message);
+        }
+      })
+      .withFailureHandler(function(err){
+        b.disabled = false; b.textContent = 'Sign in'; alert(err.message);
+      })
+           .authenticateUser(
+        document.getElementById('loginEmail').value.trim(),
+        document.getElementById('loginPassword').value
+      );
+  });
+</script>
+
+<? } else { ?>
+<!-- ======================= DELEGATION ======================= -->
+<?!= include('Navbar.html'); ?>
+
+<div class="main">
+
+  <div class="page-head">
+    <div>
+      <div class="page-title">Delegation</div>
+      <div class="page-sub">Assign work, track progress, approve completed tasks.</div>
+    </div>
+      <div class="head-actions">
+      <button class="btn btn-ghost" onclick="load()">&#8635; Refresh</button>
+      <button class="btn btn-ghost" onclick="exportCsv()">Export CSV</button>
+      <button class="btn btn-ghost" onclick="openBuddy()">Set buddy (leave coverage)</button>
+      <button class="btn btn-primary" onclick="openAssign()">+ Assign new task</button>
+    </div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filter-card">
+    <div class="filter-bar">
+      <div class="fl">&#9776; Filters <span class="filter-count" id="filterCount" style="display:none;">0</span></div>
+      <div class="fr">
+        <button class="link-btn" onclick="clearFilters()">Clear all</button>
+        <button class="chev" id="filterToggle" onclick="toggleFilters()">Hide &#9650;</button>
+      </div>
+    </div>
+    <div class="filter-body" id="filterBody">
+      <div class="filters">
+        <div class="field combo">
+          <label for="fName">Doer</label>
+          <input type="text" id="fName" placeholder="All doers" autocomplete="off">
+          <div class="combo-list" id="fNameList"></div>
+        </div>
+        <div class="field combo">
+          <label for="fTask">Task</label>
+          <input type="text" id="fTask" placeholder="Search text" autocomplete="off">
+          <div class="combo-list" id="fTaskList"></div>
+        </div>
+        <div class="field">
+          <label for="fStatus">Status</label>
+          <select id="fStatus"><option value="">All</option>
+            <? for (var i = 0; i < cfg.STATUSES.length; i++) { ?><option><?= cfg.STATUSES[i] ?></option><? } ?>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fPriority">Priority</label>
+          <select id="fPriority"><option value="">All</option>
+            <? for (var i = 0; i < cfg.PRIORITIES.length; i++) { ?><option><?= cfg.PRIORITIES[i] ?></option><? } ?>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fFinal">Final date</label>
+          <select id="fFinal"><option value="">Any</option>
+            <option value="passed">Passed</option><option value="today">Today</option><option value="future">Future</option>
+          </select>
+        </div>
+        <div class="field"><label for="fDate">On date</label><input type="date" id="fDate"></div>
+        <div class="field"><label for="fFrom">From</label><input type="date" id="fFrom"></div>
+        <div class="field"><label for="fTo">To</label><input type="date" id="fTo"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TILES -->
+  <div class="tiles">
+    <div class="tile"><div class="ti">&#128203;</div><div><div class="tv" id="sTotal">0</div><div class="tl">Total tasks</div></div></div>
+    <div class="tile amber"><div class="ti">&#9203;</div><div><div class="tv" id="sPending">0</div><div class="tl">Pending</div></div></div>
+    <div class="tile green"><div class="ti">&#10003;</div><div><div class="tv" id="sCompleted">0</div><div class="tl">Completed</div></div></div>
+    <div class="tile red"><div class="ti">&#8635;</div><div><div class="tv" id="sShifted">0</div><div class="tl">Shifted</div></div></div>
+    <div class="tile purple"><div class="ti">&#9200;</div><div><div class="tv" id="sApproval">0</div><div class="tl">Approval waiting</div></div></div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">Tasks</div>
+      <div id="countInfo" style="font-size:12px;color:var(--muted);"></div>
+    </div>
+    <div class="loading show" id="loading"><div class="spinner"></div>Loading tasks…</div>
+    <div class="table-wrap" id="tableWrap" style="display:none;">
+      <table class="data" id="taskTable">
+        <thead><tr>
+          <th data-key="taskId">ID</th>
+          <th data-key="timestamp">Created</th>
+          <th data-key="assignedBy">Assigned by</th>
+          <th data-key="assignedTo">Assigned to</th>
+          <th data-key="task">Task</th>
+          <th data-key="plannedDate">Planned</th>
+          <th data-key="revision1">Revision</th>
+          <th data-key="dueDate">Due</th>
+          <th data-key="status">Status</th>
+          <th>Voice note</th>
+          <th>Task log</th>
+          <th>Docs</th>
+          <th>Proof</th>
+          <th data-key="proofReq">Proof req.</th>
+          <th data-key="priority">Priority</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="emptyState" style="display:none;">
+      <span class="ei">&#128269;</span>No matching records found. Adjust your filters or assign a new task.
+    </div>
+    <div class="pager" id="pager" style="display:none;">
+      <div id="pageInfo"></div>
+      <div class="pctrl">
+        <select id="pageSize" onchange="setPageSize(this.value)"><option>10</option><option>25</option><option>50</option><option>100</option></select>
+        <button class="pbtn" id="prevBtn" onclick="gotoPage(state.page-1)">&lsaquo;</button>
+        <span id="pageNums" style="display:flex;gap:5px;"></span>
+        <button class="pbtn" id="nextBtn" onclick="gotoPage(state.page+1)">&rsaquo;</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ASSIGN ============ -->
+<div class="overlay" id="mAssign">
+  <div class="modal wide">
+    <div class="modal-head"><h3>Assign new task</h3><button class="modal-close" onclick="closeModal('mAssign')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="assignAlert"></div>
+      <div class="grid-2">
+        <div class="field combo">
+          <label class="required" for="aDoer">Doer</label>
+          <input type="text" id="aDoer" placeholder="Search a doer" autocomplete="off">
+          <div class="combo-list" id="aDoerList"></div>
+        </div>
+        <div class="field">
+          <label class="required" for="aPriority">Priority</label>
+          <select id="aPriority">
+            <? for (var i = 0; i < cfg.PRIORITIES.length; i++) { ?><option><?= cfg.PRIORITIES[i] ?></option><? } ?>
+          </select>
+        </div>
+      </div>
+      <div class="field combo">
+        <label for="aVerifier">Verifier (optional)</label>
+        <input type="text" id="aVerifier" placeholder="Defaults to you" autocomplete="off">
+        <div class="combo-list" id="aVerifierList"></div>
+        <span class="hint">This person approves/sends-back the task. Leave blank to verify it yourself.</span>
+      </div>
+      <div class="field">
+        <label class="required" for="aTask">Task description</label>
+        <textarea id="aTask" placeholder="What exactly needs to be done?"></textarea>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label class="required" for="aDue">Due date</label><input type="date" id="aDue"></div>
+        <div class="field">
+          <label for="aProofReq">Evidence required</label>
+          <select id="aProofReq"><option value="No">No</option><option value="Yes">Yes</option></select>
+          <span class="hint">If yes, the doer must upload proof before completing.</span>
+        </div>
+      </div>
+      <? if (cfg.ENABLE_VOICE_NOTES) { ?>
+      <div class="field">
+        <label>Voice note</label>
+        <div class="voice-box">
+          <button type="button" class="btn btn-ghost btn-sm" id="recordButton" onclick="openRecorder()">
+            <span id="recordIcon">&#127908;</span> <span id="recordText">Record voice note</span>
+          </button>
+          <span class="vmeta" id="voiceNoteStatus">Optional — opens a small recorder window</span>
+        </div>
+        <audio id="audioPlayback" controls style="display:none;"></audio>
+      </div>
+      <? } ?>
+      <div class="field">
+        <label>Attachments</label>
+        <div class="drop" id="aDrop">Click or drop files here — multiple files supported</div>
+        <input type="file" id="aFiles" multiple style="display:none;">
+        <div class="file-list" id="aFileList"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mAssign')">Cancel</button>
+      <button class="btn btn-primary" id="assignSubmit" onclick="submitAssign(this)">Assign task</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ BUDDY ============ -->
+<div class="overlay" id="mBuddy">
+  <div class="modal">
+    <div class="modal-head"><h3>Set a buddy (temporary leave coverage)</h3><button class="modal-close" onclick="closeModal('mBuddy')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="buddyAlert"></div>
+      <div class="field combo">
+        <label class="required" for="bOriginal">Doer going on leave</label>
+        <input type="text" id="bOriginal" placeholder="Search a doer" autocomplete="off">
+        <div class="combo-list" id="bOriginalList"></div>
+      </div>
+      <div class="field combo">
+        <label class="required" for="bBuddy">Buddy (will cover their tasks)</label>
+        <input type="text" id="bBuddy" placeholder="Search a doer" autocomplete="off">
+        <div class="combo-list" id="bBuddyList"></div>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label class="required" for="bFrom">From date</label><input type="date" id="bFrom"></div>
+        <div class="field"><label class="required" for="bTo">To date</label><input type="date" id="bTo"></div>
+      </div>
+      <span class="hint">During this window, the buddy will see and can update/complete both Delegation and Checklist tasks that belong to the doer above — nothing is permanently reassigned.</span>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mBuddy')">Close</button>
+      <button class="btn btn-primary" onclick="submitBuddy(this)">Set buddy</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ REASSIGN ============ -->
+<div class="overlay" id="mReassign">
+  <div class="modal">
+    <div class="modal-head"><h3>Reassign task</h3><button class="modal-close" onclick="closeModal('mReassign')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="reassignAlert"></div>
+      <div class="field"><label>Task</label><div class="readout" id="rTaskInfo"></div></div>
+      <div class="field"><label>Currently with</label><div class="readout" id="rCurrent"></div></div>
+      <div class="field combo">
+        <label class="required" for="rDoer">New doer</label>
+        <input type="text" id="rDoer" placeholder="Search a doer" autocomplete="off">
+        <div class="combo-list" id="rDoerList"></div>
+        <span class="hint">The new doer is emailed straight away, and the handover is written to the task log.</span>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mReassign')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitReassign(this)">Reassign</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ REMARK ============ -->
+<div class="overlay" id="mRemark">
+  <div class="modal">
+    <div class="modal-head"><h3 id="remarkTitle">Add remark</h3><button class="modal-close" onclick="closeModal('mRemark')">&times;</button></div>
+    <div class="modal-body">
+      <div class="alert" id="remarkAlert"></div>
+      <div class="field"><label>Task</label><div class="readout" id="rmTaskInfo"></div></div>
+      <div class="field"><label class="required" for="rmText">Remark</label><textarea id="rmText" placeholder="Type your remark"></textarea></div>
+      <div class="field" id="rmStatusWrap">
+        <label for="rmStatus">Also change status to</label>
+        <select id="rmStatus"><option value="">Leave unchanged</option>
+          <? for (var i = 0; i < cfg.STATUSES.length; i++) { ?><option><?= cfg.STATUSES[i] ?></option><? } ?>
+        </select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mRemark')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitRemark(this)">Save remark</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TASK LOG ============ -->
+<div class="overlay" id="mLog">
+  <div class="modal">
+    <div class="modal-head"><h3 id="logTitle">Task log</h3><button class="modal-close" onclick="closeModal('mLog')">&times;</button></div>
+    <div class="modal-body"><div class="timeline" id="logBody"></div></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mLog')">Close</button>
+      <button class="btn btn-primary" id="logAddBtn" onclick="addRemarkFromLog()">Add remark</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ VOICE NOTE ============ -->
+<div class="overlay" id="mVoice">
+  <div class="modal slim">
+    <div class="modal-head"><h3>Voice note</h3><button class="modal-close" onclick="closeVoice()">&times;</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Recorded by</label><div class="readout" id="vBy"></div></div>
+      <div id="vPlayer"></div>
+      <a id="vOpen" href="#" target="_blank" class="link-btn">Open in Google Drive &rarr;</a>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeVoice()">Close</button></div>
+  </div>
+</div>
+
+<!-- ============ DETAILS ============ -->
+<div class="overlay" id="mDetails">
+  <div class="modal wide">
+    <div class="modal-head"><h3>Task details</h3><button class="modal-close" onclick="closeModal('mDetails')">&times;</button></div>
+    <div class="modal-body" id="detailsBody"></div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('mDetails')">Close</button></div>
+  </div>
+</div>
+
+<!-- ============ CONFIRM ============ -->
+<div class="overlay" id="mConfirm">
+  <div class="modal slim">
+    <div class="modal-head"><h3 id="cfTitle">Confirm</h3><button class="modal-close" onclick="closeModal('mConfirm')">&times;</button></div>
+    <div class="modal-body">
+      <p id="cfText" style="font-size:13.5px;color:var(--body);"></p>
+      <div class="field" id="cfReasonWrap" style="display:none;">
+        <label class="required" for="cfReason">Reason</label>
+        <textarea id="cfReason" placeholder="Explain why this is being sent back"></textarea>
+      </div>
+      <div class="alert" id="cfAlert"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mConfirm')">Cancel</button>
+      <button class="btn btn-danger" id="cfOk">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =============================== STATE =============================== */
+var ME = <?!= JSON.stringify(user) ?>;
+var IS_ADMIN = ME.accessLevel === 'ADMIN';
+var RECORDER_URL = '<?= cfg.VOICE_RECORDER_URL ?>';
+var state = { all: [], filtered: [], doers: [], page: 1, size: 10, sort: {key:'taskId', dir:'asc'} };
+var assignFiles = [], voiceNoteData = null, recorderWindow = null;
+
+/* =============================== LOAD =============================== */
+var LOADED = false;
+function load(){
+  var box = document.getElementById('loading');
+  var tw  = document.getElementById('tableWrap');
+  if(!LOADED) box.classList.add('show'); else tw.classList.add('is-refreshing');
+  var done = function(){ box.classList.remove('show'); tw.classList.remove('is-refreshing'); };
+  google.script.run
+    .withSuccessHandler(function(data){
+      state.doers = data.doers;
+      state.all = data.tasks;
+      applyFilters();
+      LOADED = true; done();
+    })
+    .withFailureHandler(function(e){ done(); toast(e.message, true); })
+    .getBootstrap('all');
+}
+
+/* =============================== FILTERS =============================== */
+var FILTER_IDS = ['fName','fTask','fStatus','fPriority','fFinal','fDate','fFrom','fTo'];
+FILTER_IDS.forEach(function(id){
+  document.getElementById(id).addEventListener('change', function(){
+    if(id === 'fDate' && this.value){ document.getElementById('fFrom').value=''; document.getElementById('fTo').value=''; }
+    if((id === 'fFrom' || id === 'fTo') && this.value){ document.getElementById('fDate').value = ''; }
+    applyFilters();
+  });
+});
+function toggleFilters(){
+  var b = document.getElementById('filterBody'), t = document.getElementById('filterToggle');
+  var hidden = b.style.display === 'none';
+  b.style.display = hidden ? 'block' : 'none';
+  t.innerHTML = hidden ? 'Hide &#9650;' : 'Show &#9660;';
+}
+function clearFilters(){
+  FILTER_IDS.forEach(function(id){ document.getElementById(id).value=''; });
+  applyFilters();
+}
+function activeFilterCount(){
+  return FILTER_IDS.filter(function(id){ return document.getElementById(id).value.trim() !== ''; }).length;
+}
+
+function applyFilters(){
+  var name = document.getElementById('fName').value.trim().toLowerCase();
+  var task = document.getElementById('fTask').value.trim().toLowerCase();
+  var st   = document.getElementById('fStatus').value;
+  var pr   = document.getElementById('fPriority').value;
+  var fin  = document.getElementById('fFinal').value;
+  var one  = document.getElementById('fDate').value;
+  var from = document.getElementById('fFrom').value;
+  var to   = document.getElementById('fTo').value;
+  var today = todayStr();
+
+  state.filtered = state.all.filter(function(t){
+    // Tasks waiting on verification live on the Verification tab by default —
+    // keep them off the main Delegation list unless explicitly filtered for.
+    if(!st && t.status === 'Approval Waiting') return false;
+    if(name && t.assignedTo.toLowerCase().indexOf(name) === -1) return false;
+    if(task && t.task.toLowerCase().indexOf(task) === -1) return false;
+    if(st && t.status !== st) return false;
+    if(pr && t.priority !== pr) return false;
+    var d = t.currentDate;
+    if(fin === 'passed' && !(d && d < today)) return false;
+    if(fin === 'today'  && d !== today) return false;
+    if(fin === 'future' && !(d && d > today)) return false;
+    if(one && d !== one) return false;
+    if(!one){
+      if(from && (!d || d < from)) return false;
+      if(to   && (!d || d > to))   return false;
+    }
+    return true;
+  });
+
+  var n = activeFilterCount();
+  var badge = document.getElementById('filterCount');
+  badge.style.display = n ? 'inline-block' : 'none';
+  badge.textContent = n;
+
+  state.page = 1;
+  renderStats(); renderTable();
+}
+
+function renderStats(){
+  var f = state.filtered;
+  var by = function(s){ return f.filter(function(t){ return t.status === s; }).length; };
+  document.getElementById('sTotal').textContent     = f.length;
+  document.getElementById('sPending').textContent   = by('Pending');
+  document.getElementById('sCompleted').textContent = by('Completed');
+  document.getElementById('sShifted').textContent   = by('Shifted');
+  document.getElementById('sApproval').textContent  = by('Approval Waiting');
+  document.getElementById('countInfo').textContent  = f.length + ' of ' + state.all.length + ' tasks';
+}
+
+/* =============================== TABLE =============================== */
+function fileIcons(urls, icon, tip){
+  if(!urls || !urls.length) return '<span class="dash">—</span>';
+  return urls.map(function(u,i){
+    return '<a href="'+esc(u)+'" target="_blank" class="icon-btn" data-tip="'+tip+' '+(i+1)+'">'+icon+'</a>';
+  }).join(' ');
+}
+
+/* every log entry across reason / MD / EA, newest first */
+function taskLog(t){
+  var out = [];
+  parseRemarks(t.reason).forEach(function(i){ i.tag = 'Status'; out.push(i); });
+  parseRemarks(t.mdRemark).forEach(function(i){ i.tag = 'MD'; out.push(i); });
+  parseRemarks(t.eaRemark).forEach(function(i){ i.tag = 'EA'; out.push(i); });
+  return out.sort(function(a,b){ return (b.when||'').localeCompare(a.when||''); });
+}
+
+function voiceCell(t){
+  if(!t.voiceNote) return '<span class="dash">—</span>';
+  var who = t.voiceBy || 'Unknown';
+  var when = t.voiceAt ? prettyDate(t.voiceAt.slice(0,10)) + ' ' + t.voiceAt.slice(11) : '';
+  return '<div class="voice-cell">' +
+    '<button class="icon-btn" data-tip="Play voice note" onclick="openVoice(\'' + t.taskId + '\')">&#9654;</button>' +
+    '<span><button class="link-btn" onclick="openVoice(\'' + t.taskId + '\')">' + esc(who) + '</button>' +
+    (when ? '<span class="sub">' + esc(when) + '</span>' : '') + '</span></div>';
+}
+
+function renderTable(){
+  var tb = document.getElementById('tbody');
+  if(!state.filtered.length){
+    document.getElementById('tableWrap').style.display='none';
+    document.getElementById('pager').style.display='none';
+    document.getElementById('emptyState').style.display='block';
+    return;
+  }
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('tableWrap').style.display='block';
+  document.getElementById('pager').style.display='flex';
+
+  var sorted = sortRows(state.filtered, state.sort);
+  var start = (state.page-1)*state.size;
+  var rows = sorted.slice(start, start+state.size);
+
+  tb.innerHTML = rows.map(function(t){
+    var canAct = IS_ADMIN || t.canManage;
+    var logCount = taskLog(t).length;
+    var act = '';
+  if(t.status === 'Approval Waiting' && t.canManage){
+      act += '<button class="icon-btn ok" data-tip="Approve" onclick="doApprove(\''+t.taskId+'\')">&#10003;</button>' +
+             '<button class="icon-btn no" data-tip="Send back" onclick="doDisapprove(\''+t.taskId+'\')">&#10007;</button>';
+    }
+ if(canAct){
+      act += '<button class="icon-btn" data-tip="Send reminder" onclick="doRemind(\''+t.taskId+'\')">&#128276;</button>' +
+             '<button class="icon-btn" data-tip="Send immediate email" onclick="doSendEmail(\''+t.taskId+'\')">&#9993;</button>' +
+             '<button class="icon-btn" data-tip="Reassign" onclick="openReassign(\''+t.taskId+'\')">&#8644;</button>';
+    }
+    act += '<span class="menu">' +
+             '<button class="icon-btn" data-tip="More" onclick="toggleMenu(event,\'m_'+t.taskId+'\')">&hellip;</button>' +
+             '<span class="menu-list" id="m_'+t.taskId+'">' +
+               '<button onclick="openDetails(\''+t.taskId+'\')">View details</button>' +
+               '<button onclick="openLog(\''+t.taskId+'\')">View task log</button>' +
+               (canAct ? '<button onclick="openReassign(\''+t.taskId+'\')">Reassign task</button>' : '') +
+               (canAct ? '<button onclick="openRemark(\''+t.taskId+'\',\'md\')">Add MD remark</button>' : '') +
+               (canAct ? '<button onclick="openRemark(\''+t.taskId+'\',\'ea\')">Add EA remark</button>' : '') +
+               (canAct ? '<button class="danger" onclick="doDelete(\''+t.taskId+'\')">Delete task</button>' : '') +
+             '</span></span>';
+
+    return '<tr>' +
+      '<td><span class="badge b-id">'+esc(t.taskId)+'</span></td>' +
+      '<td class="nowrap">'+(t.timestamp ? prettyDate(t.timestamp.slice(0,10)) : '—')+'</td>' +
+      '<td><span class="chip"><span class="ca">'+initials(t.assignedBy)+'</span>'+esc(t.assignedBy)+'</span></td>' +
+            '<td><span class="chip"><span class="ca">'+initials(t.assignedTo)+'</span>'+esc(t.assignedTo)+'</span>' +
+        (t.buddy ? '<span class="sub">&#128101; covered by '+esc(t.buddy)+'</span>' : '')+'</td>' +
+    '<td class="cell-task">'+nl2br(t.task)+'</td>' +
+      '<td class="nowrap">'+prettyDate(t.plannedDate)+'</td>' +
+      '<td class="nowrap">'+(t.revision1 ? prettyDate(t.revision1)+'<span class="sub">rev '+t.revisions+'</span>' : '<span class="dash">—</span>')+'</td>' +
+      '<td class="nowrap">'+prettyDate(t.dueDate)+'</td>' +
+      '<td><span class="badge '+statusClass(t.status)+'">'+esc(t.status)+'</span></td>' +
+      '<td>'+voiceCell(t)+'</td>' +
+      '<td class="nowrap">'+(logCount
+          ? '<button class="link-btn" onclick="openLog(\''+t.taskId+'\')">View <span class="badge b-count">'+logCount+'</span></button>'
+          : '<span class="dash">—</span>')+'</td>' +
+      '<td>'+fileIcons(t.documents, '&#128206;', 'Document')+'</td>' +
+      '<td>'+fileIcons(t.proofUrl ? [t.proofUrl] : [], '&#128444;', 'Proof')+'</td>' +
+      '<td><span class="badge '+(t.proofReq==='Yes'?'b-yes':'b-no')+'">'+t.proofReq+'</span></td>' +
+      '<td><span class="badge '+priorityClass(t.priority)+'">'+esc(t.priority)+'</span></td>' +
+      '<td><div class="actions-cell">'+act+'</div></td>' +
+    '</tr>';
+  }).join('');
+
+  renderPager();
+}
+
+function renderPager(){
+  var total = state.filtered.length, pages = Math.max(1, Math.ceil(total/state.size));
+  var start = (state.page-1)*state.size;
+  document.getElementById('pageInfo').textContent =
+    'Showing ' + (start+1) + '–' + Math.min(start+state.size, total) + ' of ' + total;
+  document.getElementById('prevBtn').disabled = state.page <= 1;
+  document.getElementById('nextBtn').disabled = state.page >= pages;
+  var nums='', f=Math.max(1,state.page-2), to=Math.min(pages,f+4);
+  for(var p=f;p<=to;p++) nums += '<button class="pbtn '+(p===state.page?'active':'')+'" onclick="gotoPage('+p+')">'+p+'</button>';
+  document.getElementById('pageNums').innerHTML = nums;
+}
+function gotoPage(p){
+  var pages = Math.max(1, Math.ceil(state.filtered.length/state.size));
+  state.page = Math.min(Math.max(1,p), pages); renderTable();
+}
+function setPageSize(v){ state.size = Number(v); state.page = 1; renderTable(); }
+function toggleMenu(e, id){
+  e.stopPropagation();
+  document.querySelectorAll('.menu-list.open').forEach(function(m){ if(m.id!==id) m.classList.remove('open'); });
+
+  var m  = document.getElementById(id);
+  var tw = document.getElementById('tableWrap');
+  var opening = !m.classList.contains('open');
+
+  m.classList.remove('drop-up');
+  if(opening){
+    tw.classList.add('menu-open');           // lets the menu escape the table's clip
+    m.classList.add('open');
+    // if it would run past the bottom of the viewport, open it upward instead
+    var r = m.getBoundingClientRect();
+    if(r.bottom > window.innerHeight - 8) m.classList.add('drop-up');
+  } else {
+    m.classList.remove('open');
+    tw.classList.remove('menu-open');
+  }
+}
+function taskById(id){ return state.all.filter(function(t){ return t.taskId === id; })[0]; }
+
+/* =============================== VOICE NOTE =============================== */
+function openRecorder(){
+  recorderWindow = window.open(RECORDER_URL, 'VoiceRecorder', 'width=420,height=480');
+  if(!recorderWindow) toast('Allow pop-ups for this site to record a voice note.', true);
+}
+window.addEventListener('message', function(event){
+  if(!event.data || typeof event.data !== 'object') return;
+
+  if(event.data.type === 'voiceRecording'){
+    voiceNoteData = { data: event.data.data, mimeType: event.data.mimeType, name: event.data.name || 'voice-note.webm' };
+    var byteStr = atob(voiceNoteData.data);
+    var bytes = new Uint8Array(byteStr.length);
+    for(var i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
+    var blob = new Blob([bytes], { type: voiceNoteData.mimeType });
+    var pb = document.getElementById('audioPlayback');
+    pb.src = URL.createObjectURL(blob);
+    pb.style.display = 'block';
+    document.getElementById('recordIcon').textContent = '\u2705';
+    document.getElementById('recordText').textContent = 'Re-record voice note';
+    document.getElementById('voiceNoteStatus').textContent = 'Voice note attached';
+  }
+  if(event.data.type === 'voiceRecordingCancelled'){
+    document.getElementById('voiceNoteStatus').textContent = 'Recording cancelled';
+  }
+});
+function resetVoice(){
+  voiceNoteData = null;
+  var pb = document.getElementById('audioPlayback');
+  if(pb){ pb.src=''; pb.style.display='none'; }
+  var ri = document.getElementById('recordIcon');
+  if(ri){
+    ri.innerHTML = '&#127908;';
+    document.getElementById('recordText').textContent = 'Record voice note';
+    document.getElementById('voiceNoteStatus').textContent = 'Optional — opens a small recorder window';
+  }
+}
+function openVoice(id){
+  var t = taskById(id); if(!t || !t.voiceNote) return;
+  var when = t.voiceAt ? ' · ' + prettyDate(t.voiceAt.slice(0,10)) + ' at ' + t.voiceAt.slice(11) : '';
+  document.getElementById('vBy').textContent = (t.voiceBy || 'Unknown') + when;
+  document.getElementById('vOpen').href = t.voiceNote;
+  document.getElementById('vPlayer').innerHTML = t.voiceId
+    ? '<iframe class="voice-frame" src="https://drive.google.com/file/d/'+esc(t.voiceId)+'/preview" allow="autoplay"></iframe>'
+    : '<div class="readout">Preview unavailable — open the file in Drive.</div>';
+  openModal('mVoice');
+}
+function closeVoice(){
+  document.getElementById('vPlayer').innerHTML = '';   // stops playback
+  closeModal('mVoice');
+}
+
+/* =============================== ASSIGN =============================== */
+function openAssign(){
+  hideAlert('assignAlert');
+  ['aDoer','aTask','aVerifier'].forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('aDue').value = todayStr();
+  document.getElementById('aDue').min = todayStr();
+  document.getElementById('aProofReq').value = 'No';
+  assignFiles = []; resetVoice(); renderFileList();
+  openModal('mAssign');
+}
+document.getElementById('aDrop').addEventListener('click', function(){ document.getElementById('aFiles').click(); });
+document.getElementById('aFiles').addEventListener('change', function(e){
+  Array.prototype.forEach.call(e.target.files, function(f){ assignFiles.push(f); });
+  this.value=''; renderFileList();
+});
+['dragover','dragleave','drop'].forEach(function(ev){
+  document.getElementById('aDrop').addEventListener(ev, function(e){
+    e.preventDefault();
+    this.classList.toggle('over', ev === 'dragover');
+    if(ev === 'drop'){
+      Array.prototype.forEach.call(e.dataTransfer.files, function(f){ assignFiles.push(f); });
+      renderFileList();
+    }
+  });
+});
+function renderFileList(){
+  document.getElementById('aFileList').innerHTML = assignFiles.map(function(f,i){
+    return '<div class="file-row"><span>'+esc(f.name)+' · '+Math.round(f.size/1024)+' KB</span>' +
+           '<button onclick="removeFile('+i+')" title="Remove">&times;</button></div>';
+  }).join('');
+}
+function removeFile(i){ assignFiles.splice(i,1); renderFileList(); }
+
+function submitAssign(btn){
+  hideAlert('assignAlert');
+ var payload = {
+    doerName : document.getElementById('aDoer').value.trim(),
+    priority : document.getElementById('aPriority').value,
+    task     : document.getElementById('aTask').value.trim(),
+    dueDate  : document.getElementById('aDue').value,
+    verifier : document.getElementById('aVerifier').value.trim(),
+    proofRequired : document.getElementById('aProofReq').value === 'Yes'
+  };
+  if(!payload.doerName){ showAlert('assignAlert','Choose a doer from the list.'); return; }
+  if(!state.doers.some(function(d){ return d.name === payload.doerName; })){
+    showAlert('assignAlert','That doer is not in the Doer List.'); return; }
+  if(payload.verifier && !state.doers.some(function(d){ return d.name === payload.verifier; })){
+    showAlert('assignAlert','That verifier is not in the Doer List.'); return; }
+  if(!payload.task){ showAlert('assignAlert','Enter a task description.'); return; }
+  if(!payload.dueDate){ showAlert('assignAlert','Choose a due date.'); return; }
+
+  busy(btn, true, 'Assigning…');
+  if(voiceNoteData){
+    payload.voiceNote = { name: voiceNoteData.name, mimeType: voiceNoteData.mimeType, data: voiceNoteData.data };
+  }
+  Promise.all(assignFiles.map(readFile)).then(function(files){
+    payload.attachments = files;
+    google.script.run
+      .withSuccessHandler(function(res){ busy(btn,false); closeModal('mAssign'); toast(res.message); load(); })
+      .withFailureHandler(function(e){ busy(btn,false); showAlert('assignAlert', e.message); })
+      .assignTask(payload);
+  }).catch(function(e){ busy(btn,false); showAlert('assignAlert', e.message); });
+}
+
+/* =============================== REASSIGN =============================== */
+var reassignId = null;
+function openReassign(id){
+  var t = taskById(id); if(!t) return;
+  reassignId = id; hideAlert('reassignAlert');
+  document.getElementById('rTaskInfo').textContent = t.taskId + ' — ' + t.task;
+  document.getElementById('rCurrent').textContent = t.assignedTo;
+  document.getElementById('rDoer').value = '';
+  closeModal('mDetails'); closeModal('mLog');
+  openModal('mReassign');
+}
+function submitReassign(btn){
+  var doer = document.getElementById('rDoer').value.trim();
+  if(!doer){ showAlert('reassignAlert','Choose the new doer.'); return; }
+  if(!state.doers.some(function(d){ return d.name === doer; })){
+    showAlert('reassignAlert','That doer is not in the Doer List.'); return; }
+  busy(btn, true, 'Reassigning…');
+  google.script.run
+    .withSuccessHandler(function(res){ busy(btn,false); closeModal('mReassign'); toast(res.message); load(); })
+    .withFailureHandler(function(e){ busy(btn,false); showAlert('reassignAlert', e.message); })
+    .reassignTask(reassignId, doer);
+}
+
+/* =============================== REMARKS & LOG =============================== */
+var remarkId = null, remarkType = 'md', logId = null;
+function openRemark(id, type){
+  var t = taskById(id); if(!t) return;
+  remarkId = id; remarkType = type; hideAlert('remarkAlert');
+  document.getElementById('remarkTitle').textContent = type === 'md' ? 'Add MD remark' : 'Add EA remark';
+  document.getElementById('rmTaskInfo').textContent = t.taskId + ' — ' + t.task;
+  document.getElementById('rmText').value = '';
+  document.getElementById('rmStatus').value = '';
+  document.getElementById('rmStatusWrap').style.display = type === 'md' ? 'flex' : 'none';
+  closeModal('mLog');
+  openModal('mRemark');
+}
+function submitRemark(btn){
+  var text = document.getElementById('rmText').value.trim();
+  if(!text){ showAlert('remarkAlert','Type a remark first.'); return; }
+  busy(btn, true, 'Saving…');
+  var ok = function(res){ busy(btn,false); closeModal('mRemark'); toast(res.message); load(); };
+  var no = function(e){ busy(btn,false); showAlert('remarkAlert', e.message); };
+  if(remarkType === 'md'){
+    google.script.run.withSuccessHandler(ok).withFailureHandler(no)
+      .addMDRemark(remarkId, text, document.getElementById('rmStatus').value);
+  } else {
+    google.script.run.withSuccessHandler(ok).withFailureHandler(no).addEARemark(remarkId, text);
+  }
+}
+
+function openLog(id){
+  var t = taskById(id); if(!t) return;
+  logId = id;
+  document.getElementById('logTitle').textContent = 'Task log — ' + t.taskId;
+  var items = taskLog(t);
+  document.getElementById('logBody').innerHTML = items.length
+    ? items.map(function(it){
+        return '<div class="tl-item '+it.kind+'"><div class="tl-meta"><span class="tl-tag">'+esc(it.tag)+'</span>' +
+               esc(it.when) + (it.who ? ' · ' + esc(it.who) : '') + '</div>' +
+               '<div class="tl-text">'+esc(it.text)+'</div></div>';
+      }).join('')
+    : '<div class="empty">Nothing recorded yet.</div>';
+  document.getElementById('logAddBtn').style.display = (IS_ADMIN || t.canManage) ? 'inline-flex' : 'none';
+  openModal('mLog');
+}
+function addRemarkFromLog(){ if(logId) openRemark(logId, 'md'); }
+
+function openDetails(id){
+  var t = taskById(id); if(!t) return;
+  var row = function(k,v){ return '<div class="field"><label>'+k+'</label><div>'+v+'</div></div>'; };
+  var canAct = IS_ADMIN || t.canManage;
+  document.getElementById('detailsBody').innerHTML =
+    '<div class="grid-2">' +
+      row('Task ID', '<span class="badge b-id">'+esc(t.taskId)+'</span>') +
+      row('Status', '<span class="badge '+statusClass(t.status)+'">'+esc(t.status)+'</span>') +
+       row('Assigned by', esc(t.assignedBy)) +
+      row('Verifier', esc(t.verifier || t.assignedBy)) +
+      row('Assigned to', esc(t.assignedTo) + (canAct ? ' <button class="link-btn" onclick="openReassign(\''+t.taskId+'\')">Reassign</button>' : '')) +
+      row('Priority', '<span class="badge '+priorityClass(t.priority)+'">'+esc(t.priority)+'</span>') +
+      row('Created', t.timestamp ? prettyDate(t.timestamp.slice(0,10)) : '—') +
+      row('Planned date', prettyDate(t.plannedDate)) + row('Due date', prettyDate(t.dueDate)) +
+      row('Revision', t.revision1 ? prettyDate(t.revision1) : '—') + row('Revisions used', t.revisions) +
+      row('Proof required', t.proofReq) + row('Completed on', t.actualDate || '—') +
+    '</div>' +
+  row('Task', nl2br(t.task)) +
+    row('Voice note', t.voiceNote
+        ? '<button class="link-btn" onclick="openVoice(\''+t.taskId+'\')">Play — recorded by ' + esc(t.voiceBy || 'unknown') + '</button>'
+        : '<span class="dash">None</span>') +
+    row('Task log', '<button class="link-btn" onclick="openLog(\''+t.taskId+'\')">View full history</button>') +
+    row('Attachments', fileIcons(t.documents,'&#128206;','Document')) +
+    row('Proof of completion', fileIcons(t.proofUrl?[t.proofUrl]:[], '&#128444;','Proof'));
+  openModal('mDetails');
+}
+
+
+function doSendEmail(id){
+  toast('Sending email immediately…');
+  google.script.run
+    .withSuccessHandler(function(res){ toast(res.message); })
+    .withFailureHandler(function(e){ toast(e.message, true); })
+    .sendImmediateTaskEmail(id);
+}
+
+/* =============================== ACTIONS =============================== */
+function confirmAction(title, text, needReason, onOk){
+  document.getElementById('cfTitle').textContent = title;
+  document.getElementById('cfText').textContent = text;
+  document.getElementById('cfReasonWrap').style.display = needReason ? 'flex' : 'none';
+  document.getElementById('cfReason').value = '';
+  hideAlert('cfAlert');
+  var ok = document.getElementById('cfOk');
+  var fresh = ok.cloneNode(true);
+  ok.parentNode.replaceChild(fresh, ok);
+  fresh.addEventListener('click', function(){
+    var reason = document.getElementById('cfReason').value.trim();
+    if(needReason && !reason){ showAlert('cfAlert','Enter a reason.'); return; }
+    busy(fresh, true, 'Working…');
+    onOk(reason, fresh);
+  });
+  openModal('mConfirm');
+}
+function runAction(fnName, args, btn){
+  var r = google.script.run
+    .withSuccessHandler(function(res){ busy(btn,false); closeModal('mConfirm'); toast(res.message); load(); })
+    .withFailureHandler(function(e){ busy(btn,false); showAlert('cfAlert', e.message); });
+  r[fnName].apply(r, args);
+}
+function doApprove(id){
+  confirmAction('Approve task', 'Approve task ' + id + ' and close it?', false, function(_, btn){
+    runAction('approveTask', [id], btn); });
+}
+function doDisapprove(id){
+  confirmAction('Send task back', 'Send task ' + id + ' back to the doer for rework.', true, function(reason, btn){
+    runAction('disapproveTask', [id, reason], btn); });
+}
+function doDelete(id){
+  confirmAction('Delete task', 'Delete task ' + id + ' permanently? This cannot be undone.', false, function(_, btn){
+    runAction('deleteDelegatedTask', [id], btn); });
+}
+function doRemind(id){
+  toast('Sending reminder…');
+  google.script.run
+    .withSuccessHandler(function(res){ toast(res.message); })
+    .withFailureHandler(function(e){ toast(e.message, true); })
+    .sendTaskReminder(id);
+}
+
+/* =============================== EXPORT =============================== */
+function exportCsv(){
+  if(!state.filtered.length){ toast('Nothing to export.', true); return; }
+  var head = ['Task ID','Created','Assigned By','Assigned To','Task','Planned','Revision','Due',
+              'Status','Voice Note By','Voice Note At','Proof Required','Priority','Task Log'];
+  var rows = [head].concat(sortRows(state.filtered, state.sort).map(function(t){
+    return [t.taskId,t.timestamp,t.assignedBy,t.assignedTo,t.task,t.plannedDate,t.revision1,t.dueDate,
+            t.status,t.voiceBy,t.voiceAt,t.proofReq,t.priority,
+            taskLog(t).map(function(i){ return '['+i.when+'] '+i.tag+' '+i.who+': '+i.text; }).join(' | ')];
+  }));
+  downloadCSV(rows, 'delegation-tasks-' + todayStr() + '.csv');
+}
+
+/* =============================== INIT =============================== */
+wireCombo('fName','fNameList', function(){ return state.doers.map(function(d){ return d.name; }); }, applyFilters);
+wireCombo('fTask','fTaskList', function(){
+  var seen = {};
+  return state.all.map(function(t){ return t.task; }).filter(function(v){ if(!v||seen[v]) return false; seen[v]=1; return true; });
+}, applyFilters);
+wireCombo('aDoer','aDoerList', function(){ return state.doers.map(function(d){ return d.name; }); });
+wireCombo('aVerifier','aVerifierList', function(){ return state.doers.map(function(d){ return d.name; }); });
+wireCombo('rDoer','rDoerList', function(){ return state.doers.map(function(d){ return d.name; }); });
+wireCombo('bOriginal','bOriginalList', function(){ return state.doers.map(function(d){ return d.name; }); });
+wireCombo('bBuddy','bBuddyList', function(){ return state.doers.map(function(d){ return d.name; }); });
+
+/* =============================== BUDDY ============================ */
+/* =============================== BUDDY ============================ */
+function openBuddy(){
+  hideAlert('buddyAlert');
+  document.getElementById('bOriginal').value = IS_ADMIN ? '' : ME.name;
+  document.getElementById('bBuddy').value = '';
+  document.getElementById('bFrom').value = todayStr();
+  document.getElementById('bTo').value = todayStr();
+  openModal('mBuddy');
+}
+function submitBuddy(btn){
+  var original = document.getElementById('bOriginal').value.trim();
+  var buddy    = document.getElementById('bBuddy').value.trim();
+  var from     = document.getElementById('bFrom').value;
+  var to       = document.getElementById('bTo').value;
+  if(!original || !buddy){ showAlert('buddyAlert','Choose both doers.'); return; }
+  if(!from || !to){ showAlert('buddyAlert','Choose the from and to dates.'); return; }
+  hideAlert('buddyAlert');
+  busy(btn, true, 'Saving…');
+  google.script.run
+    .withSuccessHandler(function(res){
+      busy(btn, false);
+      closeModal('mBuddy');
+      toast(res.message);
+      load();
+    })
+    .withFailureHandler(function(e){ busy(btn, false); showAlert('buddyAlert', e.message); })
+    .addBuddyAssignment(original, buddy, from, to);
+}
+
+wireSort('taskTable', state, renderTable);
+document.getElementById('fFinal').value = 'today';
+load();
+</script>
+<? } ?>
+</body>
+</html>
